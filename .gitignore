@@ -1,0 +1,28 @@
+# Secrets
+.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+.next/
+
+# macOS
+.DS_Store
+
+# Claude Code local settings
+.claude/
+
+# All datasets, vectors, images, caches — regenerable via pipeline/; keep out
+# of git. Eval numbers live in eval/eval_results/ (tracked).
+data/
+*.sqlite
+*.faiss
+*.pkl
+*.npz
+cluster_image_report.html
+cluster_visualization.png

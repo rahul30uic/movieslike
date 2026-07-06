@@ -1,0 +1,85 @@
+[
+  {
+    "variant": "A_siglip_w0.1",
+    "n": 2885,
+    "lift_rare": 5.91,
+    "lift_jaccard": 6.09,
+    "by_mod_rare": {
+      "image-only": 6.98,
+      "text+image": 6.01,
+      "text-only": 0.37
+    }
+  },
+  {
+    "variant": "B_captions_bge",
+    "n": 3132,
+    "lift_rare": 4.77,
+    "lift_jaccard": 4.9,
+    "by_mod_rare": {
+      "image-only": 5.5,
+      "neither": 0.83,
+      "text+image": 5.3,
+      "text-only": 2.29
+    }
+  },
+  {
+    "variant": "C_hybrid_wcap0.3",
+    "n": 3132,
+    "lift_rare": 6.52,
+    "lift_jaccard": 6.43,
+    "by_mod_rare": {
+      "image-only": 8.2,
+      "neither": 0.55,
+      "text+image": 7.16,
+      "text-only": 0.87
+    }
+  },
+  {
+    "variant": "C_hybrid_wcap0.4",
+    "n": 3132,
+    "lift_rare": 6.74,
+    "lift_jaccard": 6.7,
+    "by_mod_rare": {
+      "image-only": 8.43,
+      "neither": 0.55,
+      "text+image": 7.48,
+      "text-only": 0.87
+    }
+  },
+  {
+    "variant": "C_hybrid_wcap0.5",
+    "n": 3132,
+    "lift_rare": 6.77,
+    "lift_jaccard": 6.78,
+    "by_mod_rare": {
+      "image-only": 8.44,
+      "neither": 0.55,
+      "text+image": 7.53,
+      "text-only": 0.87
+    }
+  },
+  {
+    "variant": "C_hybrid_wcap0.6",
+    "n": 3132,
+    "lift_rare": 6.41,
+    "lift_jaccard": 6.46,
+    "by_mod_rare": {
+      "image-only": 7.83,
+      "neither": 0.55,
+      "text+image": 7.27,
+      "text-only": 0.88
+    }
+  },
+  {
+    "variant": "C_hybrid_wcap0.7",
+    "n": 3132,
+    "lift_rare": 5.86,
+    "lift_jaccard": 5.93,
+    "by_mod_rare": {
+      "image-only": 7.09,
+      "neither": 0.55,
+      "text+image": 6.63,
+      "text-only": 1.12
+    }
+  }
+]
