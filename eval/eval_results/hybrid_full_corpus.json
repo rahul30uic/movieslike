@@ -1,0 +1,57 @@
+{
+  "k": 10,
+  "n_posts": 3715,
+  "n_unique_movies": 17510,
+  "head_size": 913,
+  "random_baseline": {
+    "any_overlap": 0.1879,
+    "jaccard": 0.0042,
+    "rare_overlap": 0.0341
+  },
+  "knn": {
+    "any_overlap": 0.5459,
+    "jaccard": 0.0296,
+    "rare_overlap": 0.2561,
+    "lift_any": 2.9,
+    "lift_jaccard": 7.08,
+    "lift_rare": 7.51
+  },
+  "by_modality": {
+    "image-only": {
+      "n": 1444,
+      "any_overlap": 0.681,
+      "jaccard": 0.038,
+      "rare_overlap": 0.3373,
+      "lift_any": 3.62,
+      "lift_jaccard": 9.08,
+      "lift_rare": 9.89
+    },
+    "neither": {
+      "n": 417,
+      "any_overlap": 0.0954,
+      "jaccard": 0.0034,
+      "rare_overlap": 0.0113,
+      "lift_any": 0.51,
+      "lift_jaccard": 0.8,
+      "lift_rare": 0.33
+    },
+    "text+image": {
+      "n": 1446,
+      "any_overlap": 0.655,
+      "jaccard": 0.0356,
+      "rare_overlap": 0.3113,
+      "lift_any": 3.49,
+      "lift_jaccard": 8.5,
+      "lift_rare": 9.13
+    },
+    "text-only": {
+      "n": 408,
+      "any_overlap": 0.1409,
+      "jaccard": 0.0056,
+      "rare_overlap": 0.0233,
+      "lift_any": 0.75,
+      "lift_jaccard": 1.35,
+      "lift_rare": 0.68
+    }
+  }
+}

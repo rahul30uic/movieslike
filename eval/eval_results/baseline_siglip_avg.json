@@ -1,0 +1,60 @@
+{
+  "k": 10,
+  "n_posts": 3730,
+  "n_unique_movies": 17531,
+  "head_size": 915,
+  "random_baseline": {
+    "any_overlap": 0.187,
+    "jaccard": 0.0041,
+    "rare_overlap": 0.034
+  },
+  "knn": {
+    "any_overlap": 0.4323,
+    "jaccard": 0.0189,
+    "rare_overlap": 0.1703,
+    "lift_any": 2.31,
+    "lift_jaccard": 4.61,
+    "lift_rare": 5.01
+  },
+  "by_modality": {
+    "image-only": {
+      "n": 1450,
+      "any_overlap": 0.6212,
+      "jaccard": 0.0306,
+      "rare_overlap": 0.2787,
+      "lift_any": 3.32,
+      "lift_jaccard": 7.45,
+      "lift_rare": 8.19
+    },
+    "neither": {
+      "n": 417,
+      "any_overlap": 0.0602,
+      "jaccard": 0.0025,
+      "rare_overlap": 0.0077,
+      "lift_any": 0.32,
+      "lift_jaccard": 0.62,
+      "lift_rare": 0.23
+    },
+    "text+image": {
+      "n": 1455,
+      "any_overlap": 0.4525,
+      "jaccard": 0.0166,
+      "rare_overlap": 0.1549,
+      "lift_any": 2.42,
+      "lift_jaccard": 4.06,
+      "lift_rare": 4.55
+    },
+    "text-only": {
+      "n": 408,
+      "any_overlap": 0.0694,
+      "jaccard": 0.0022,
+      "rare_overlap": 0.0066,
+      "lift_any": 0.37,
+      "lift_jaccard": 0.54,
+      "lift_rare": 0.19
+    }
+  },
+  "name": "baseline_siglip_avg",
+  "embeddings_file": "posts_with_vectors.json",
+  "timestamp": "2026-07-04T18:28:08.409745+00:00"
+}
