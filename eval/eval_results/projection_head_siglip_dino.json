@@ -1,0 +1,9 @@
+{
+  "tag": "siglip_dino",
+  "baseline_val_rare_lift": 4.24,
+  "trained_val_rare_lift": 4.56,
+  "gain_pct": 7.5,
+  "n_train": 2972,
+  "n_val": 743,
+  "n_anchor_posts": 2821
+}

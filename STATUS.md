@@ -76,6 +76,16 @@
   for them (0.88) — acceptable at 8% of corpus; revisit via image-block
   imputation if it matters.
 
+- **2026-07-13** — Trained component shipped: residual contrastive projection
+  head (zero-init MLP delta over frozen features), positives = rare-movie
+  co-recommendation, honest 80/20 post split. Val rare-lift: raw 4.27 →
+  trained **4.54 (+6.3%)**. Two instructive failures kept in the log: a
+  non-residual head *destroyed* the pretrained geometry (−9%), and raw
+  DINOv2 underperformed SigLIP for mood retrieval (3.07 vs 4.27; trained it
+  recovers to only 4.16). SigLIP+DINO combined+head: 4.56 — tie, DINO adds
+  nothing here. Verdict: caption+SigLIP+head is production. DINOv3 rerun
+  pending HF license acceptance (`pipeline/encode_dino.py --model ...`).
+
 ## Known issues / risks
 
 - Posts with no descriptors AND no image get the embedding of `""` (garbage
