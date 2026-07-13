@@ -1,0 +1,9 @@
+{
+  "tag": "dinov2",
+  "baseline_val_rare_lift": 3.07,
+  "trained_val_rare_lift": 4.16,
+  "gain_pct": 35.5,
+  "n_train": 2972,
+  "n_val": 743,
+  "n_anchor_posts": 2821
+}

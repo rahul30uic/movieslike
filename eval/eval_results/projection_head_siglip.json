@@ -1,0 +1,9 @@
+{
+  "tag": "siglip",
+  "baseline_val_rare_lift": 4.27,
+  "trained_val_rare_lift": 4.54,
+  "gain_pct": 6.3,
+  "n_train": 2972,
+  "n_val": 743,
+  "n_anchor_posts": 2821
+}
