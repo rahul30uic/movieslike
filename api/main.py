@@ -35,7 +35,7 @@ from pydantic import BaseModel, Field
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "data")
+DATA_DIR = os.environ.get("MOVIESLIKE_DATA_DIR", os.path.join(os.path.dirname(SCRIPT_DIR), "data"))
 MOVIE_VECTORS_FILE = os.path.join(DATA_DIR, "movie_vectors_hybrid.json")
 POST_VECTORS_FILE = os.path.join(DATA_DIR, "posts_with_hybrid_vectors.json")
 DATASET_CSV = os.path.join(DATA_DIR, "final_dataset.csv")
@@ -375,7 +375,7 @@ def probe_recommend(req: ProbeRecommendRequest):
     return {"recommendations": rank(target, req.alpha, req.num_recommendations, req.min_support, req.min_votes)}
 
 
-@app.get("/")
+@app.get("/health")
 def root():
     return {
         "message": "Movieslike retrieval API (hybrid vibe space).",
