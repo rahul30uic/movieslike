@@ -1,6 +1,8 @@
 "use client";
 
 import { VibeAnchors } from "@/components/VibeAnchors";
+import { VibeSearch } from "@/components/VibeSearch";
+import { ImageSearch } from "@/components/ImageSearch";
 import { PenaltySlider } from "@/components/PenaltySlider";
 import { MovieGrid } from "@/components/MovieGrid";
 import { useRecommendations } from "@/hooks/useRecommendations";
@@ -14,7 +16,9 @@ export default function Home() {
     movies,
     isLoading,
     error,
-    fetchRecommendations
+    fetchRecommendations,
+    fetchByText,
+    fetchByImage
   } = useRecommendations();
 
   return (
@@ -25,11 +29,29 @@ export default function Home() {
             MovieVibes AI
           </h1>
           <p className="text-gray-400 mt-2">Select a vibe, tune the popularity, and discover your next watch.</p>
+          {process.env.NEXT_PUBLIC_ENABLE_PROBE !== "false" && (
+            <a
+              href="/probe"
+              className="inline-block mt-5 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg shadow-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-300"
+            >
+              Can&apos;t put it in words? Lock in your head-space →
+            </a>
+          )}
         </header>
 
         <section className="mb-12">
           <h2 className="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">1. Choose a Vibe Profile</h2>
           <VibeAnchors selectedAnchor={selectedAnchor} onSelectAnchor={setSelectedAnchor} />
+        </section>
+
+        <section className="mb-12 max-w-3xl mx-auto">
+          <h2 className="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">…or describe the vibe yourself</h2>
+          <VibeSearch onSearch={fetchByText} isLoading={isLoading} />
+        </section>
+
+        <section className="mb-12 max-w-3xl mx-auto">
+          <h2 className="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">…or show us an image that feels right</h2>
+          <ImageSearch onSearch={fetchByImage} isLoading={isLoading} />
         </section>
 
         <section className="mb-12 max-w-2xl mx-auto">

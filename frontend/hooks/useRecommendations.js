@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 /**
  * Custom hook to manage recommendation state and logic.
@@ -65,5 +65,82 @@ export const useRecommendations = () => {
         }
     }, [selectedAnchor, alpha]); // Dependencies for the fetch function
 
-    return { selectedAnchor, setSelectedAnchor, alpha, setAlpha, movies, isLoading, error, fetchRecommendations };
+    /**
+     * Fetches recommendations from a free-text vibe description.
+     * Clears any selected anchor — the query becomes the target.
+     */
+    const fetchByText = useCallback(async (query) => {
+        if (!query || query.trim().length < 2) {
+            setError("Describe the vibe in a few words first.");
+            return;
+        }
+
+        setSelectedAnchor(null);
+        setIsLoading(true);
+        setError(null);
+        setMovies([]);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/recommendations/text`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: query.trim(),
+                    alpha: alpha,
+                    num_recommendations: 12
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Network response was not ok: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            setMovies(data.recommendations || []);
+        } catch (err) {
+            setError(err.message || "An unknown error occurred while fetching recommendations.");
+        } finally {
+            setIsLoading(false);
+        }
+    }, [alpha]);
+
+    /**
+     * Fetches recommendations from an uploaded mood image (query-by-image).
+     */
+    const fetchByImage = useCallback(async (file) => {
+        if (!file) {
+            setError("Choose an image first.");
+            return;
+        }
+
+        setSelectedAnchor(null);
+        setIsLoading(true);
+        setError(null);
+        setMovies([]);
+
+        try {
+            const form = new FormData();
+            form.append("file", file);
+            form.append("alpha", String(alpha));
+            form.append("num_recommendations", "12");
+
+            const response = await fetch(`${API_BASE_URL}/recommendations/image`, {
+                method: 'POST',
+                body: form,
+            });
+
+            if (!response.ok) {
+                throw new Error(`Network response was not ok: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            setMovies(data.recommendations || []);
+        } catch (err) {
+            setError(err.message || "An unknown error occurred while fetching recommendations.");
+        } finally {
+            setIsLoading(false);
+        }
+    }, [alpha]);
+
+    return { selectedAnchor, setSelectedAnchor, alpha, setAlpha, movies, isLoading, error, fetchRecommendations, fetchByText, fetchByImage };
 };
