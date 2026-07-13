@@ -1,47 +1,50 @@
 # Deploying the live demo
 
-Two free-tier pieces: the API on a Hugging Face Space (Docker), the frontend
-on Vercel. Total cost: $0. The public demo serves the anchor grid, text
-search, and image upload; the probe stays local-only (its 3.5GB of
-Reddit-sourced images shouldn't be redistributed).
+Two free-tier pieces: the API on a Hugging Face Space (**Gradio SDK** — the
+Docker SDK went paid-only in 2026), the frontend on Vercel. Total cost: $0.
 
-## 1. API → Hugging Face Space
+The Space runs `deploy/hf_space/app.py`, which mounts the full FastAPI inside
+a Gradio app — so the Space page doubles as a self-contained demo UI, while
+the JSON API stays available for the Vercel frontend at the same host.
 
-1. Create a (free) account at huggingface.co, then **New Space** →
-   SDK: **Docker** → name it e.g. `movieslike-api` → CPU basic (free).
-2. From the repo root:
+The public demo serves the anchor grid, text search, and image upload; the
+probe stays local-only (its 3.5GB of Reddit-sourced images shouldn't be
+redistributed — the API detects the missing data and disables /probe).
+
+## 1. API → Hugging Face Space (Gradio SDK)
+
+1. Create a free account at huggingface.co → **New Space**:
+   SDK **Gradio** (blank template) · CPU basic (free) · name `movieslike-api`.
+2. Get a **Write** token (Settings → Access Tokens) and run
+   `huggingface-cli login` locally.
+3. From the repo root, assemble and push the Space:
 
    ```bash
-   git clone https://huggingface.co/spaces/<YOUR_HF_USER>/movieslike-api hf-space
-   cp deploy/Dockerfile hf-space/Dockerfile
-   cp -r api hf-space/api
-   cp -r deploy/data hf-space/deploy-data && mv hf-space/deploy-data hf-space/data
-   # Dockerfile copies api/ and data/ — adjust COPY paths to match:
-   #   COPY api/ /app/api/     COPY data/ /app/data/
-   cd hf-space && git add -A && git commit -m "deploy api" && git push
+   git clone https://huggingface.co/spaces/<HF_USER>/movieslike-api hf-space
+   cp deploy/hf_space/{app.py,requirements.txt,README.md} hf-space/
+   cp api/main.py hf-space/
+   mkdir -p hf-space/data && cp deploy/data/* hf-space/data/
+   cd hf-space && git add -A && git commit -m "deploy" && git push
    ```
 
-3. In the Space's **Settings → Variables**, set
-   `ALLOWED_ORIGINS=https://<your-vercel-domain>` once you know it (step 2.3).
-4. The Space builds (~10 min, model downloads baked into the image) and serves
-   at `https://<YOUR_HF_USER>-movieslike-api.hf.space`.
+4. First build takes a few minutes (model downloads happen on first boot).
+   The Space serves at `https://<HF_USER>-movieslike-api.hf.space`.
+5. Space **Settings → Variables**: `ALLOWED_ORIGINS=https://<vercel-domain>`.
 
 ## 2. Frontend → Vercel
 
-1. vercel.com → **Add New Project** → import the `movieslike` GitHub repo →
-   set **Root Directory** to `frontend/`.
+1. vercel.com → sign up **with GitHub** → Add New Project → import
+   `movieslike` → Root Directory: `frontend/`.
 2. Environment variables:
-   - `NEXT_PUBLIC_API_URL` = `https://<YOUR_HF_USER>-movieslike-api.hf.space`
-   - `NEXT_PUBLIC_ENABLE_PROBE` = `false`  (probe is local-only)
-3. Deploy. Note the domain Vercel assigns, and put it into the Space's
-   `ALLOWED_ORIGINS` (step 1.3), comma-separated if you add a custom domain.
+   - `NEXT_PUBLIC_API_URL` = `https://<HF_USER>-movieslike-api.hf.space`
+   - `NEXT_PUBLIC_ENABLE_PROBE` = `false`
+3. Deploy, note the domain, and feed it back into `ALLOWED_ORIGINS` (step 1.5).
 
 ## Gotchas
 
-- Free HF Spaces sleep after ~48h idle; first request after sleep takes
-  ~1 min. Before an interview round, open the link once to warm it.
-- The frontend's `public/reddit_images_*` symlink resolves to nothing in
-  Vercel's build — that's fine, nothing in the deployed pages references it.
-- To update the live API after pipeline changes: re-run
-  `python pipeline/export_deploy_artifacts.py`, copy `deploy/data` into the
-  Space checkout, commit, push.
+- Free Spaces sleep after ~48h idle; the wake-up takes ~1 min (plus model
+  re-download on a fresh boot). Warm your link before interviews.
+- To update the live API: re-run `pipeline/export_deploy_artifacts.py` if
+  vectors changed, re-copy the files into the Space checkout, push.
+- The Gradio demo UI and the JSON API share ranking code — `/docs` on the
+  Space host shows the OpenAPI schema.
