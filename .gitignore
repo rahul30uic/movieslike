@@ -20,12 +20,14 @@ node_modules/
 # All datasets, vectors, images, caches — regenerable via pipeline/; keep out
 # of git. Eval numbers live in eval/eval_results/ (tracked).
 data/
-# …except the compact artifacts the live demo is built from (27MB)
-!deploy/data/
-!deploy/data/**
 *.sqlite
 *.faiss
 *.pkl
 *.npz
 cluster_image_report.html
 cluster_visualization.png
+
+# Exception (must stay last — later rules win): the compact artifacts the
+# live demo is built from (27MB total)
+!deploy/data/
+!deploy/data/**
