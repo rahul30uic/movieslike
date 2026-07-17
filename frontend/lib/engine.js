@@ -161,22 +161,54 @@ function dot(a, b) {
 }
 
 /** Bradley-Terry particle posterior over the probe pool. History references
- *  pool row indices (chosen/rejected). */
+ *  pool row indices (chosen/rejected).
+ *
+ *  Margins are z-scored across particles before the sigmoid: raw cosine
+ *  differences in this space are tiny, so unstandardized likelihoods barely
+ *  move the posterior and rounds FEEL independent. Standardized, one pick
+ *  shifts a 1-sigma-preferring particle by ~4:1 odds. */
+const PICK_DECISIVENESS = 1.4; // sigmoid slope per sigma of preference
+
 function probePosterior(history) {
     const n = probePool.items.length;
     const w = new Float64Array(n).fill(1);
+    const margins = new Float64Array(n);
     for (const { chosen, rejected } of history) {
         const vc = poolVec(chosen), vr = poolVec(rejected);
+        let mean = 0;
         for (let p = 0; p < n; p++) {
             const v = poolVec(p);
-            const margin = dot(v, vc) - dot(v, vr);
-            w[p] *= 1 / (1 + Math.exp(-PROBE_SHARPNESS * margin));
+            margins[p] = dot(v, vc) - dot(v, vr);
+            mean += margins[p];
+        }
+        mean /= n;
+        let varSum = 0;
+        for (let p = 0; p < n; p++) varSum += (margins[p] - mean) ** 2;
+        const std = Math.sqrt(varSum / n) + 1e-9;
+        for (let p = 0; p < n; p++) {
+            w[p] *= 1 / (1 + Math.exp(-PICK_DECISIVENESS * (margins[p] / std)));
         }
     }
     let total = 0;
     for (const x of w) total += x;
     for (let p = 0; p < n; p++) w[p] = total > 0 ? w[p] / total : 1 / n;
     return w;
+}
+
+/** Diagnosis-style summary: posterior confidence (1 - normalized entropy)
+ *  and the current best "reading" of the mood. */
+export async function probeSummary(history, onStatus) {
+    await loadProbe(onStatus);
+    const w = probePosterior(history);
+    let H = 0;
+    for (const x of w) if (x > 0) H -= x * Math.log(x);
+    const confidence = 1 - H / Math.log(w.length);
+    let top = 0;
+    for (let p = 1; p < w.length; p++) if (w[p] > w[top]) top = p;
+    return {
+        confidence,
+        reading: probePool.items[top].c || null,
+    };
 }
 
 function weightedPick(indices, w) {
@@ -210,6 +242,12 @@ export async function probeNext(history, onStatus) {
         const c = weightedPick(avail, w);
         if (c !== a) cands.add(c);
     }
+    // Coarse-to-fine schedule: early rounds demand maximum contrast (broad
+    // differential); later rounds relax it so both images come from inside
+    // the posterior's region — fine-grained follow-up questions.
+    const progress = Math.min(history.length / (PROBE_ROUNDS - 1), 1);
+    const contrastWeight = 0.8 * (1 - progress) + 0.1;
+
     let best = null, bestScore = Infinity;
     for (const c of cands) {
         const vc = poolVec(c);
@@ -219,7 +257,7 @@ export async function probeNext(history, onStatus) {
             const margin = simsA[p] - dot(poolVec(p), vc);
             pA += w[p] / (1 + Math.exp(-PROBE_SHARPNESS * margin));
         }
-        const score = Math.abs(pA - 0.5) + 0.5 * simAB;
+        const score = Math.abs(pA - 0.5) + contrastWeight * simAB;
         if (score < bestScore) { bestScore = score; best = c; }
     }
 

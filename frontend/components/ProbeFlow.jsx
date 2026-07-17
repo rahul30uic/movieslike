@@ -18,6 +18,18 @@ export const ProbeFlow = () => {
     const [movies, setMovies] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
+    // Diagnosis readout: posterior confidence + current best mood reading
+    const [summary, setSummary] = useState(null);
+
+    const refreshSummary = useCallback(async (hist) => {
+        if (!BROWSER_ENGINE || hist.length === 0) return;
+        try {
+            const engine = await import("@/lib/engine");
+            setSummary(await engine.probeSummary(hist, () => {}));
+        } catch {
+            /* readout is cosmetic — never block the flow */
+        }
+    }, []);
 
     const fetchNextPair = useCallback(async (hist) => {
         setIsLoading(true);
@@ -79,6 +91,7 @@ export const ProbeFlow = () => {
         if (isLoading) return;
         const hist = [...history, { chosen: chosen.post_id, rejected: rejected.post_id }];
         setHistory(hist);
+        refreshSummary(hist);
         if (hist.length >= totalRounds) {
             setPair(null);
             fetchRecommendations(hist);
@@ -91,6 +104,7 @@ export const ProbeFlow = () => {
         setHistory([]);
         setMovies(null);
         setPair(null);
+        setSummary(null);
         fetchNextPair([]);
     };
 
@@ -102,19 +116,23 @@ export const ProbeFlow = () => {
 
             {!movies && (
                 <>
-                    <div className="flex items-center justify-center gap-2 mb-8">
-                        {Array.from({ length: totalRounds }).map((_, i) => (
+                    <div className="max-w-md mx-auto mb-3">
+                        <div className="flex justify-between items-baseline mb-1.5">
+                            <span className="text-stone-500 text-xs tracking-widest uppercase">mood lock</span>
+                            <span className="text-stone-500 text-xs tracking-widest uppercase">
+                                {Math.min(round, totalRounds)} / {totalRounds}
+                            </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-stone-800 overflow-hidden">
                             <div
-                                key={i}
-                                className={`h-1.5 w-9 rounded-full transition-colors duration-500 ${
-                                    i < history.length ? "bg-amber-400" : "bg-stone-800"
-                                }`}
+                                className="h-full bg-amber-400 rounded-full transition-all duration-700"
+                                style={{ width: `${Math.round(100 * (summary?.confidence ?? 0))}%` }}
                             />
-                        ))}
-                        <span className="ml-3 text-stone-500 text-xs tracking-widest uppercase">
-                            {Math.min(round, totalRounds)} / {totalRounds}
-                        </span>
+                        </div>
                     </div>
+                    <p className="text-center text-stone-500 font-display italic text-sm mb-7 min-h-5 transition-opacity duration-500">
+                        {summary?.reading ? `current reading: ${summary.reading}` : " "}
+                    </p>
 
                     {pair && !isLoading ? (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -147,9 +165,14 @@ export const ProbeFlow = () => {
 
             {movies && (
                 <>
-                    <h2 className="font-display text-2xl sm:text-3xl text-center text-stone-200 mb-8">
+                    <h2 className="font-display text-2xl sm:text-3xl text-center text-stone-200 mb-3">
                         Your five for tonight.
                     </h2>
+                    {summary?.reading && (
+                        <p className="text-center text-stone-500 font-display italic text-sm mb-8">
+                            diagnosis: {summary.reading}
+                        </p>
+                    )}
                     <MovieGrid movies={movies} isLoading={isLoading} error={null} />
                     <div className="text-center mt-10">
                         <button
