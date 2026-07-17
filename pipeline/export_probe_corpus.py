@@ -88,7 +88,11 @@ def main():
         out = os.path.join(IMG_OUT, fname)
         img.save(out, "JPEG", quality=QUALITY, optimize=True)
         total += os.path.getsize(out)
-        kept.append({"id": p["post_id"], "f": fname})
+        # Short caption fragment: shown as the live "current reading" while
+        # the diagnosis narrows.
+        caption = (p.get("caption") or "").strip()
+        fragment = caption[:110].rsplit(" ", 1)[0] + "…" if len(caption) > 110 else caption
+        kept.append({"id": p["post_id"], "f": fname, "c": fragment})
         kept_vecs.append(vecs[i].astype(np.float16))
 
     np.stack(kept_vecs).tofile(os.path.join(ENGINE_OUT, "probe_posts.bin"))
