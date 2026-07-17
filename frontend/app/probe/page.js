@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MovieGrid } from "@/components/MovieGrid";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const BROWSER_ENGINE = process.env.NEXT_PUBLIC_USE_BROWSER_ENGINE === "true";
 
 /**
  * Head-space probe: five rounds of "which of these two feels more like
@@ -24,13 +25,19 @@ export default function ProbePage() {
         setIsLoading(true);
         setError(null);
         try {
-            const res = await fetch(`${API_BASE_URL}/probe/next`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ history: hist }),
-            });
-            if (!res.ok) throw new Error(`Probe request failed: ${res.statusText}`);
-            const data = await res.json();
+            let data;
+            if (BROWSER_ENGINE) {
+                const engine = await import("@/lib/engine");
+                data = await engine.probeNext(hist, () => {});
+            } else {
+                const res = await fetch(`${API_BASE_URL}/probe/next`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ history: hist }),
+                });
+                if (!res.ok) throw new Error(`Probe request failed: ${res.statusText}`);
+                data = await res.json();
+            }
             setPair(data.pair);
             setRound(data.round);
             setTotalRounds(data.total_rounds);
@@ -45,16 +52,22 @@ export default function ProbePage() {
         setIsLoading(true);
         setError(null);
         try {
-            const res = await fetch(`${API_BASE_URL}/probe/recommend`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                // min_votes: only recommend movies enough people have seen to
-                // rate on TMDB — the probe should end on findable titles.
-                body: JSON.stringify({ history: hist, alpha: 0.3, num_recommendations: 5, min_votes: 500 }),
-            });
-            if (!res.ok) throw new Error(`Recommendation failed: ${res.statusText}`);
-            const data = await res.json();
-            setMovies(data.recommendations || []);
+            let recs;
+            if (BROWSER_ENGINE) {
+                const engine = await import("@/lib/engine");
+                recs = await engine.probeRecommend(hist, { alpha: 0.3, minVotes: 500, n: 5 }, () => {});
+            } else {
+                const res = await fetch(`${API_BASE_URL}/probe/recommend`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    // min_votes: only recommend movies enough people have seen to
+                    // rate on TMDB — the probe should end on findable titles.
+                    body: JSON.stringify({ history: hist, alpha: 0.3, num_recommendations: 5, min_votes: 500 }),
+                });
+                if (!res.ok) throw new Error(`Recommendation failed: ${res.statusText}`);
+                recs = (await res.json()).recommendations || [];
+            }
+            setMovies(recs);
         } catch (err) {
             setError(err.message);
         } finally {
@@ -133,7 +146,7 @@ export default function ProbePage() {
                                         className="group relative rounded-xl overflow-hidden border-2 border-gray-700 hover:border-purple-500 focus:border-purple-500 transition-all duration-300 hover:scale-[1.01] cursor-pointer"
                                     >
                                         <img
-                                            src={encodeURI(img.image_url)}
+                                            src={img.image_url.startsWith("http") ? img.image_url : encodeURI(img.image_url)}
                                             alt="mood option"
                                             className="w-full h-96 object-cover"
                                         />
@@ -164,6 +177,11 @@ export default function ProbePage() {
                         </div>
                     </>
                 )}
+
+                <p className="text-center text-gray-600 text-xs mt-12">
+                    This product uses TMDB and the TMDB APIs but is not endorsed,
+                    certified, or otherwise approved by TMDB.
+                </p>
             </div>
         </main>
     );

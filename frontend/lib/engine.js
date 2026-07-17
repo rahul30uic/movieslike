@@ -119,6 +119,115 @@ export function rank(target, { alpha = 0.3, minVotes = 500, minSupport = 3, n = 
     }));
 }
 
+// =============================================================================
+// Head-space probe (browser port of api/main.py's Bayesian probe):
+// particles are well-supported movies; probe images are their TMDB backdrops.
+// =============================================================================
+
+const PROBE_SHARPNESS = 25.0;
+const PROBE_ROUNDS = 5;
+const PROBE_CANDIDATES = 24; // B-candidates scored per round (each costs a pool pass)
+const BACKDROP = "https://image.tmdb.org/t/p/w780";
+
+let probePool = null; // [{i (movies.json index), b (backdrop path)}]
+
+async function loadProbe(onStatus) {
+    if (!probePool) {
+        await loadIndex(onStatus);
+        const res = await fetch("/engine/probe.json");
+        probePool = (await res.json()).pool;
+    }
+    return probePool;
+}
+
+function movieVec(i) {
+    return state.vectors.subarray(i * state.dim, (i + 1) * state.dim);
+}
+
+function dot(a, b) {
+    let s = 0;
+    for (let j = 0; j < a.length; j++) s += a[j] * b[j];
+    return s;
+}
+
+/** Bradley-Terry particle posterior over the probe pool. */
+function probePosterior(history) {
+    const w = new Float64Array(probePool.length).fill(1);
+    for (const { chosen, rejected } of history) {
+        const vc = movieVec(chosen), vr = movieVec(rejected);
+        for (let p = 0; p < probePool.length; p++) {
+            const v = movieVec(probePool[p].i);
+            const margin = dot(v, vc) - dot(v, vr);
+            w[p] *= 1 / (1 + Math.exp(-PROBE_SHARPNESS * margin));
+        }
+    }
+    let total = 0;
+    for (const x of w) total += x;
+    for (let p = 0; p < w.length; p++) w[p] = total > 0 ? w[p] / total : 1 / w.length;
+    return w;
+}
+
+function weightedPick(indices, w) {
+    let total = 0;
+    for (const p of indices) total += w[p];
+    let r = Math.random() * total;
+    for (const p of indices) {
+        r -= w[p];
+        if (r <= 0) return p;
+    }
+    return indices[indices.length - 1];
+}
+
+export async function probeNext(history, onStatus) {
+    await loadProbe(onStatus);
+    const w = probePosterior(history);
+    const shown = new Set(history.flatMap((h) => [h.chosen, h.rejected]));
+    const avail = [];
+    for (let p = 0; p < probePool.length; p++) if (!shown.has(probePool[p].i)) avail.push(p);
+
+    // A: sampled from the posterior. B: among posterior-weighted candidates,
+    // far from A and predicted ~50/50 (cheap expected-information-gain proxy).
+    const a = weightedPick(avail, w);
+    const va = movieVec(probePool[a].i);
+    const simsA = new Float32Array(probePool.length);
+    for (let p = 0; p < probePool.length; p++) simsA[p] = dot(movieVec(probePool[p].i), va);
+
+    const cands = new Set();
+    for (let k = 0; k < PROBE_CANDIDATES * 3 && cands.size < PROBE_CANDIDATES; k++) {
+        const c = weightedPick(avail, w);
+        if (c !== a) cands.add(c);
+    }
+    let best = null, bestScore = Infinity;
+    for (const c of cands) {
+        const vc = movieVec(probePool[c].i);
+        const simAB = dot(va, vc);
+        let pA = 0;
+        for (let p = 0; p < probePool.length; p++) {
+            const margin = simsA[p] - dot(movieVec(probePool[p].i), vc);
+            pA += w[p] / (1 + Math.exp(-PROBE_SHARPNESS * margin));
+        }
+        const score = Math.abs(pA - 0.5) + 0.5 * simAB;
+        if (score < bestScore) { bestScore = score; best = c; }
+    }
+
+    const toImg = (p) => ({
+        post_id: probePool[p].i, // movie index doubles as the id
+        image_url: BACKDROP + probePool[p].b,
+    });
+    return { round: history.length + 1, total_rounds: PROBE_ROUNDS, pair: [toImg(a), toImg(best)] };
+}
+
+export async function probeRecommend(history, opts, onStatus) {
+    await loadProbe(onStatus);
+    const w = probePosterior(history);
+    const target = new Float32Array(state.dim);
+    for (let p = 0; p < probePool.length; p++) {
+        const v = movieVec(probePool[p].i);
+        for (let j = 0; j < state.dim; j++) target[j] += w[p] * v[j];
+    }
+    return rank(target, opts);
+}
+
 export async function searchVector(vec, opts, onStatus) {
     await loadIndex(onStatus);
     const target = new Float32Array(state.dim);
