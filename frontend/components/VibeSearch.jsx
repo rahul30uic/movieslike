@@ -20,15 +20,15 @@ export const VibeSearch = ({ onSearch, isLoading }) => {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder='Describe the vibe… e.g. "cozy rainy night, gentle loneliness" or "batshit crazy characters"'
-                className="flex-1 px-4 py-3 rounded-lg bg-gray-800 border-2 border-gray-700 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none transition-colors duration-300"
+                placeholder='"cozy rainy night, gentle loneliness" · "characters who are batshit crazy"'
+                className="flex-1 px-5 py-3.5 rounded-xl bg-stone-950/80 border border-stone-800 text-stone-200 placeholder-stone-600 focus:border-amber-400/70 focus:outline-none transition-colors duration-300"
             />
             <button
                 type="submit"
                 disabled={isLoading || query.trim().length < 2}
-                className="px-6 py-3 bg-purple-600 text-white font-bold rounded-lg shadow-lg hover:bg-purple-700 transition-all duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed disabled:shadow-none whitespace-nowrap"
+                className="px-6 py-3 bg-amber-400 text-stone-950 font-semibold rounded-xl hover:bg-amber-300 transition-all duration-300 disabled:bg-stone-800 disabled:text-stone-600 disabled:cursor-not-allowed whitespace-nowrap"
             >
-                {isLoading ? "Searching…" : "Search Vibe"}
+                {isLoading ? "searching…" : "Find movies"}
             </button>
         </form>
     );
