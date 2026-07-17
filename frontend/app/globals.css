@@ -1,6 +1,16 @@
 @import "tailwindcss";
 
+/* Cinematic dark: warm near-black, amber glow, film-grain restraint. */
 body {
-    background-color: #111827; /* bg-gray-900 */
+    background-color: #0a0908;
+    color: #e7e2dc;
 }
 
+.font-display {
+    font-family: var(--font-display), Georgia, serif;
+}
+
+/* Soft vignette behind hero areas */
+.vignette {
+    background: radial-gradient(ellipse 70% 55% at 50% 32%, rgba(245, 158, 11, 0.06), transparent 70%);
+}

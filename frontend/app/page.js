@@ -1,67 +1,39 @@
 "use client";
 
-import { VibeSearch } from "@/components/VibeSearch";
-import { ImageSearch } from "@/components/ImageSearch";
-import { PenaltySlider } from "@/components/PenaltySlider";
-import { MovieGrid } from "@/components/MovieGrid";
-import { useRecommendations } from "@/hooks/useRecommendations";
+import Link from "next/link";
+import { ProbeFlow } from "@/components/ProbeFlow";
 
 export default function Home() {
-  const {
-    alpha,
-    setAlpha,
-    movies,
-    isLoading,
-    error,
-    engineStatus,
-    fetchByText,
-    fetchByImage
-  } = useRecommendations();
-
   return (
-    <main className="min-h-screen bg-gray-900 text-white p-4 sm:p-8">
-      <div className="max-w-7xl mx-auto">
-        <header className="text-center mb-12">
-          <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-500">
+    <main className="min-h-screen p-4 sm:p-8 vignette">
+      <div className="max-w-4xl mx-auto">
+        <header className="text-center mt-6 mb-10">
+          <h1 className="font-display text-5xl sm:text-6xl text-stone-100 tracking-tight">
             Movieslike
           </h1>
-          <p className="text-gray-400 mt-2">
-            Describe a mood — in words or with an image — and get movies that feel like it.
+          <p className="text-stone-400 mt-4 text-lg">
+            Stop scrolling. <span className="font-display italic text-amber-200">Which of these feels more like tonight?</span>
           </p>
-          <a
-            href="/probe"
-            className="inline-block mt-5 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-lg shadow-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-300"
-          >
-            Can&apos;t put it in words? Lock in your head-space →
-          </a>
         </header>
 
-        <section className="mb-12 max-w-3xl mx-auto">
-          <h2 className="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">Describe the vibe</h2>
-          <VibeSearch onSearch={fetchByText} isLoading={isLoading} />
-        </section>
+        <ProbeFlow />
 
-        <section className="mb-12 max-w-3xl mx-auto">
-          <h2 className="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">…or show us an image that feels right</h2>
-          <ImageSearch onSearch={fetchByImage} isLoading={isLoading} />
-        </section>
+        <div className="text-center mt-14 mb-8">
+          <p className="text-stone-500 text-sm">
+            Rather say it than feel it out?{" "}
+            <Link href="/search" className="text-amber-300/90 hover:text-amber-200 underline underline-offset-4 decoration-stone-700 hover:decoration-amber-300 transition-colors">
+              describe the mood in words, or upload an image →
+            </Link>
+          </p>
+        </div>
 
-        <section className="mb-12 max-w-2xl mx-auto">
-          <h2 className="text-2xl font-semibold mb-4 border-b border-gray-700 pb-2">Hidden gems ↔ crowd favorites</h2>
-          <PenaltySlider alpha={alpha} setAlpha={setAlpha} />
-        </section>
-
-        {engineStatus && (
-          <p className="text-center text-purple-300 text-sm mb-6 animate-pulse">{engineStatus}</p>
-        )}
-
-        <section>
-          <MovieGrid movies={movies} isLoading={isLoading} error={error} />
-        </section>
-
-        <p className="text-center text-gray-600 text-xs mt-12">
-          This product uses TMDB and the TMDB APIs but is not endorsed, certified,
-          or otherwise approved by TMDB.
+        <p className="text-center text-stone-700 text-xs mt-10 mb-4">
+          Vibes learned from 4,400 Reddit &ldquo;movies that feel like this?&rdquo; posts ·{" "}
+          <a href="https://github.com/rahul30uic/movieslike" className="hover:text-stone-500 underline underline-offset-2">
+            how it works
+          </a>
+          <br />
+          This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.
         </p>
       </div>
     </main>
