@@ -31,3 +31,4 @@ cluster_visualization.png
 # live demo is built from (27MB total)
 !deploy/data/
 !deploy/data/**
+frontend/public/reddit_images_*

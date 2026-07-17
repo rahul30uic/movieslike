@@ -16,6 +16,7 @@ export default function Home() {
     movies,
     isLoading,
     error,
+    engineStatus,
     fetchRecommendations,
     fetchByText,
     fetchByImage
@@ -68,6 +69,10 @@ export default function Home() {
             {isLoading ? "Discovering..." : "Get Recommendations"}
           </button>
         </div>
+
+        {engineStatus && (
+          <p className="text-center text-purple-300 text-sm mb-6 animate-pulse">{engineStatus}</p>
+        )}
 
         <section>
           <MovieGrid movies={movies} isLoading={isLoading} error={error} />
