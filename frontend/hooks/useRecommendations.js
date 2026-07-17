@@ -3,6 +3,9 @@
 import { useState, useCallback } from 'react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+// When true, all inference runs in the browser (transformers.js + static
+// index) — no backend at all. Set on Vercel; local dev uses the FastAPI.
+const BROWSER_ENGINE = process.env.NEXT_PUBLIC_USE_BROWSER_ENGINE === "true";
 
 /**
  * Custom hook to manage recommendation state and logic.
@@ -24,6 +27,26 @@ export const useRecommendations = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
+    // Progress line for the in-browser engine (model downloads etc.)
+    const [engineStatus, setEngineStatus] = useState(null);
+
+    /** Runs an in-browser engine call with shared load/error handling. */
+    const runEngine = useCallback(async (fn) => {
+        setIsLoading(true);
+        setError(null);
+        setMovies([]);
+        try {
+            const engine = await import("@/lib/engine");
+            const recs = await fn(engine);
+            setMovies(recs);
+        } catch (err) {
+            setError(err.message || "In-browser engine failed.");
+        } finally {
+            setEngineStatus(null);
+            setIsLoading(false);
+        }
+    }, []);
+
     /**
      * Fetches movie recommendations from the FastAPI backend.
      * This function is explicitly triggered by the UI.
@@ -32,6 +55,11 @@ export const useRecommendations = () => {
         if (!selectedAnchor) {
             setError("Please select a vibe anchor first.");
             return;
+        }
+
+        if (BROWSER_ENGINE) {
+            return runEngine((e) =>
+                e.searchVector(selectedAnchor, { alpha, minVotes: 500, n: 12 }, setEngineStatus));
         }
 
         setIsLoading(true);
@@ -75,6 +103,12 @@ export const useRecommendations = () => {
             return;
         }
 
+        if (BROWSER_ENGINE) {
+            setSelectedAnchor(null);
+            return runEngine((e) =>
+                e.searchText(query.trim(), { alpha, minVotes: 500, n: 12 }, setEngineStatus));
+        }
+
         setSelectedAnchor(null);
         setIsLoading(true);
         setError(null);
@@ -113,6 +147,12 @@ export const useRecommendations = () => {
             return;
         }
 
+        if (BROWSER_ENGINE) {
+            setSelectedAnchor(null);
+            return runEngine((e) =>
+                e.searchImage(file, { alpha, minVotes: 500, n: 12 }, setEngineStatus));
+        }
+
         setSelectedAnchor(null);
         setIsLoading(true);
         setError(null);
@@ -142,5 +182,5 @@ export const useRecommendations = () => {
         }
     }, [alpha]);
 
-    return { selectedAnchor, setSelectedAnchor, alpha, setAlpha, movies, isLoading, error, fetchRecommendations, fetchByText, fetchByImage };
+    return { selectedAnchor, setSelectedAnchor, alpha, setAlpha, movies, isLoading, error, engineStatus, fetchRecommendations, fetchByText, fetchByImage };
 };
