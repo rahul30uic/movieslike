@@ -34,6 +34,9 @@ export default function Home() {
           </a>
           <br />
           This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.
+          <br />
+          Mood images originate from public Reddit posts; rights remain with their owners —
+          contact for removal.
         </p>
       </div>
     </main>
