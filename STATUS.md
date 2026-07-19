@@ -97,6 +97,17 @@
   stop). Adapter: data/siglip_lora_best; curve: eval_results/siglip_lora.json.
   Next candidate: re-encode corpus with tuned tower + rebuild web index.
 
+- **2026-07-19** — **LoRA shipped to production, with a lesson.** Naively
+  swapping the tuned tower DEGRADED full-corpus retrieval (7.51 → 7.29):
+  contrastive training sharpened image-block similarities, breaking the
+  0.5/0.5 fusion calibration. Re-swept → w_cap=0.3 → **8.10 [7.84, 8.35]
+  vs frozen 7.51 [7.27, 7.76]** (bootstrap 95% CIs, non-overlapping).
+  Browser now embeds uploads with the tuned tower (custom ONNX export,
+  q8, parity 0.984 — better than the stock conversion's 0.94). Probe pools,
+  atlas, movie index all rebuilt in the tuned space.
+- **2026-07-19** — Golden-set human eval harness added (25 scenarios × 5,
+  eval/golden_set_ratings.md) — awaiting human ratings.
+
 ## Known issues / risks
 
 - Posts with no descriptors AND no image get the embedding of `""` (garbage
