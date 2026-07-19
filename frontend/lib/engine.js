@@ -90,6 +90,71 @@ function normalize(arr) {
     return Float32Array.from(arr, (x) => x / n);
 }
 
+// =============================================================================
+// Taste vector: few-shot personalization. Completed sessions (probe
+// posteriors, search targets) fold into a persistent per-device vector via
+// EWMA; rankings blend tonight's intent with the accumulated taste prior.
+// =============================================================================
+
+const TASTE_KEY = "movieslike_taste_v1";
+const TASTE_MOMENTUM = 0.85; // EWMA decay per update
+const TASTE_BLEND = 0.2;     // weight of the prior in every ranking
+const TASTE_MIN_UPDATES = 3; // don't personalize off nearly nothing
+
+function loadTaste() {
+    try {
+        const raw = localStorage.getItem(TASTE_KEY);
+        if (!raw) return null;
+        const t = JSON.parse(raw);
+        return { vec: Float32Array.from(t.vec), n: t.n };
+    } catch {
+        return null;
+    }
+}
+
+function updateTaste(vec) {
+    try {
+        const cur = loadTaste();
+        let merged;
+        if (cur && cur.vec.length === vec.length) {
+            merged = new Float32Array(vec.length);
+            for (let j = 0; j < vec.length; j++) {
+                merged[j] = TASTE_MOMENTUM * cur.vec[j] + (1 - TASTE_MOMENTUM) * vec[j];
+            }
+        } else {
+            merged = Float32Array.from(vec);
+        }
+        merged = normalize(merged);
+        localStorage.setItem(TASTE_KEY, JSON.stringify({
+            vec: Array.from(merged, (x) => Math.round(x * 1e5) / 1e5),
+            n: (cur?.n || 0) + 1,
+        }));
+    } catch {
+        /* private browsing etc. — personalization is best-effort */
+    }
+}
+
+function personalize(target) {
+    const t = loadTaste();
+    if (!t || t.n < TASTE_MIN_UPDATES) return target;
+    const out = new Float32Array(target.length);
+    for (let j = 0; j < target.length; j++) {
+        out[j] = (1 - TASTE_BLEND) * target[j] + TASTE_BLEND * t.vec[j];
+    }
+    return normalize(out);
+}
+
+export function tasteInfo() {
+    const t = loadTaste();
+    return { active: !!t && t.n >= TASTE_MIN_UPDATES, sessions: t?.n || 0 };
+}
+
+export function resetTaste() {
+    try {
+        localStorage.removeItem(TASTE_KEY);
+    } catch { /* ignore */ }
+}
+
 /** Ranking — mirror of rank() in api/main.py. */
 export function rank(target, { alpha = 0.3, minVotes = 500, minSupport = 3, n = 12 } = {}) {
     const { movies, vectors, dim, penalties } = state;
@@ -276,7 +341,8 @@ export async function probeRecommend(history, opts, onStatus) {
         const v = poolVec(p);
         for (let j = 0; j < state.dim; j++) target[j] += w[p] * v[j];
     }
-    return rank(target, opts);
+    updateTaste(normalize(target)); // a completed diagnosis is the strongest taste signal
+    return rank(personalize(target), opts);
 }
 
 export async function searchVector(vec, opts, onStatus) {
@@ -295,7 +361,8 @@ export async function searchText(query, opts, onStatus) {
     const target = new Float32Array(state.dim);
     target.set(q, 0); // caption block; image block stays zero
     onStatus?.(null);
-    return rank(target, opts);
+    updateTaste(target);
+    return rank(personalize(target), opts);
 }
 
 export async function searchImage(fileOrUrl, opts, onStatus) {
@@ -310,7 +377,8 @@ export async function searchImage(fileOrUrl, opts, onStatus) {
     const target = new Float32Array(state.dim);
     target.set(v, state.dim - v.length); // image block
     onStatus?.(null);
-    const recommendations = rank(target, opts);
+    updateTaste(target);
+    const recommendations = rank(personalize(target), opts);
 
     // --- Introspection: which regions of the upload drove the match? ---
     // SigLIP patch tokens vs the top match's image block, as a spatial grid.
