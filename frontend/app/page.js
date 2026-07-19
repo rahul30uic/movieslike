@@ -2,8 +2,26 @@
 
 import Link from "next/link";
 import { ProbeFlow } from "@/components/ProbeFlow";
+import { VibeSearch } from "@/components/VibeSearch";
+import { ImageSearch } from "@/components/ImageSearch";
+import { PenaltySlider } from "@/components/PenaltySlider";
+import { MovieGrid } from "@/components/MovieGrid";
+import { MatchExplanation } from "@/components/MatchExplanation";
+import { useRecommendations } from "@/hooks/useRecommendations";
 
 export default function Home() {
+  const {
+    alpha,
+    setAlpha,
+    movies,
+    isLoading,
+    error,
+    engineStatus,
+    explanation,
+    fetchByText,
+    fetchByImage
+  } = useRecommendations();
+
   return (
     <main className="min-h-screen p-4 sm:p-8 vignette">
       <div className="max-w-4xl mx-auto">
@@ -18,20 +36,40 @@ export default function Home() {
 
         <ProbeFlow />
 
-        <div className="text-center mt-14 mb-8">
-          <p className="text-stone-500 text-sm">
-            Rather say it than feel it out?{" "}
-            <Link href="/search" className="text-amber-300/90 hover:text-amber-200 underline underline-offset-4 decoration-stone-700 hover:decoration-amber-300 transition-colors">
-              describe the mood in words, or upload an image →
-            </Link>
-          </p>
-          <p className="text-stone-600 text-sm mt-2">
-            or{" "}
-            <Link href="/atlas" className="hover:text-stone-400 underline underline-offset-4 decoration-stone-800">
-              wander the map of every mood we know
-            </Link>
-          </p>
+        <div className="flex items-center gap-4 mt-16 mb-10">
+          <div className="flex-1 h-px bg-stone-800" />
+          <span className="font-display italic text-stone-500">or tell us yourself</span>
+          <div className="flex-1 h-px bg-stone-800" />
         </div>
+
+        <section className="mb-8 max-w-3xl mx-auto">
+          <VibeSearch onSearch={fetchByText} isLoading={isLoading} />
+        </section>
+
+        <section className="mb-8 max-w-3xl mx-auto">
+          <ImageSearch onSearch={fetchByImage} isLoading={isLoading} />
+        </section>
+
+        <section className="mb-8 max-w-2xl mx-auto">
+          <PenaltySlider alpha={alpha} setAlpha={setAlpha} />
+        </section>
+
+        {engineStatus && (
+          <p className="text-center text-amber-200/90 text-sm mb-6 animate-pulse">{engineStatus}</p>
+        )}
+
+        <section className="mb-8">
+          <MovieGrid movies={movies} isLoading={isLoading} error={error} />
+        </section>
+
+        <MatchExplanation explanation={explanation} />
+
+        <p className="text-center text-stone-500 text-sm mt-6">
+          Curious how the space is organized?{" "}
+          <Link href="/atlas" className="text-amber-300/90 hover:text-amber-200 underline underline-offset-4 decoration-stone-700">
+            explore the vibe atlas →
+          </Link>
+        </p>
 
         <p className="text-center text-stone-700 text-xs mt-10 mb-4">
           Vibes learned from 4,400 Reddit &ldquo;movies that feel like this?&rdquo; posts ·{" "}
