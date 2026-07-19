@@ -18,8 +18,10 @@ export default function Home() {
     error,
     engineStatus,
     explanation,
+    hasLastSearch,
     fetchByText,
-    fetchByImage
+    fetchByImage,
+    regenerate
   } = useRecommendations();
 
   return (
@@ -52,6 +54,17 @@ export default function Home() {
 
         <section className="mb-8 max-w-2xl mx-auto">
           <PenaltySlider alpha={alpha} setAlpha={setAlpha} />
+          {hasLastSearch && (
+            <div className="text-center mt-4">
+              <button
+                onClick={regenerate}
+                disabled={isLoading}
+                className="px-6 py-2.5 border border-amber-400/60 text-amber-200 rounded-full hover:bg-amber-400/10 transition-colors duration-300 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {isLoading ? "regenerating…" : "↻ regenerate with these settings"}
+              </button>
+            </div>
+          )}
         </section>
 
         {engineStatus && (

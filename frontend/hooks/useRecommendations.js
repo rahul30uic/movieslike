@@ -33,6 +33,11 @@ export const useRecommendations = () => {
     // Patch-level heatmap explaining an image query's top match
     const [explanation, setExplanation] = useState(null);
 
+    // Last executed search, so "Regenerate" can re-run it after the user
+    // moves the slider (or otherwise changes settings) without re-entering
+    // the query or re-uploading the image.
+    const [lastSearch, setLastSearch] = useState(null); // {type: 'text'|'image', payload}
+
     /** Runs an in-browser engine call with shared load/error handling. */
     const runEngine = useCallback(async (fn) => {
         setIsLoading(true);
@@ -105,6 +110,7 @@ export const useRecommendations = () => {
             setError("Describe the vibe in a few words first.");
             return;
         }
+        setLastSearch({ type: "text", payload: query.trim() });
 
         if (BROWSER_ENGINE) {
             setSelectedAnchor(null);
@@ -150,6 +156,7 @@ export const useRecommendations = () => {
             setError("Choose an image first.");
             return;
         }
+        setLastSearch({ type: "image", payload: file });
 
         if (BROWSER_ENGINE) {
             setSelectedAnchor(null);
@@ -190,5 +197,16 @@ export const useRecommendations = () => {
         }
     }, [alpha]);
 
-    return { selectedAnchor, setSelectedAnchor, alpha, setAlpha, movies, isLoading, error, engineStatus, explanation, fetchRecommendations, fetchByText, fetchByImage };
+    /** Re-runs the last search with the current settings (alpha etc.). */
+    const regenerate = useCallback(() => {
+        if (!lastSearch || isLoading) return;
+        if (lastSearch.type === "text") return fetchByText(lastSearch.payload);
+        return fetchByImage(lastSearch.payload);
+    }, [lastSearch, isLoading, fetchByText, fetchByImage]);
+
+    return {
+        selectedAnchor, setSelectedAnchor, alpha, setAlpha, movies, isLoading,
+        error, engineStatus, explanation, hasLastSearch: !!lastSearch,
+        fetchRecommendations, fetchByText, fetchByImage, regenerate,
+    };
 };
