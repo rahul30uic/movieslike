@@ -20,6 +20,7 @@ export const ProbeFlow = () => {
     const [error, setError] = useState(null);
     // Diagnosis readout: posterior confidence + current best mood reading
     const [summary, setSummary] = useState(null);
+    const [taste, setTaste] = useState(null);
 
     const refreshSummary = useCallback(async (hist) => {
         if (!BROWSER_ENGINE || hist.length === 0) return;
@@ -76,6 +77,10 @@ export const ProbeFlow = () => {
                 recs = (await res.json()).recommendations || [];
             }
             setMovies(recs);
+            if (BROWSER_ENGINE) {
+                const engine = await import("@/lib/engine");
+                setTaste(engine.tasteInfo());
+            }
         } catch (err) {
             setError(err.message);
         } finally {
@@ -181,6 +186,21 @@ export const ProbeFlow = () => {
                         >
                             different mood, start over
                         </button>
+                        {taste?.active && (
+                            <p className="text-stone-600 text-xs mt-4">
+                                lightly personalized by {taste.sessions} past sessions on this device ·{" "}
+                                <button
+                                    onClick={async () => {
+                                        const engine = await import("@/lib/engine");
+                                        engine.resetTaste();
+                                        setTaste(engine.tasteInfo());
+                                    }}
+                                    className="underline underline-offset-2 hover:text-stone-400"
+                                >
+                                    forget my taste
+                                </button>
+                            </p>
+                        )}
                     </div>
                 </>
             )}
