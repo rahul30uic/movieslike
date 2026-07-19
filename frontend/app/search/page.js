@@ -5,6 +5,7 @@ import { VibeSearch } from "@/components/VibeSearch";
 import { ImageSearch } from "@/components/ImageSearch";
 import { PenaltySlider } from "@/components/PenaltySlider";
 import { MovieGrid } from "@/components/MovieGrid";
+import { MatchExplanation } from "@/components/MatchExplanation";
 import { useRecommendations } from "@/hooks/useRecommendations";
 
 export default function SearchPage() {
@@ -15,6 +16,7 @@ export default function SearchPage() {
     isLoading,
     error,
     engineStatus,
+    explanation,
     fetchByText,
     fetchByImage
   } = useRecommendations();
@@ -56,6 +58,15 @@ export default function SearchPage() {
         <section>
           <MovieGrid movies={movies} isLoading={isLoading} error={error} />
         </section>
+
+        <MatchExplanation explanation={explanation} />
+
+        <p className="text-center text-stone-500 text-sm mt-4">
+          Curious how the space is organized?{" "}
+          <Link href="/atlas" className="text-amber-300/90 hover:text-amber-200 underline underline-offset-4 decoration-stone-700">
+            explore the vibe atlas →
+          </Link>
+        </p>
 
         <p className="text-center text-stone-700 text-xs mt-12 mb-4">
           This product uses TMDB and the TMDB APIs but is not endorsed, certified,

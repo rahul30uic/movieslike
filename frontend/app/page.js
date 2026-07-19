@@ -25,6 +25,12 @@ export default function Home() {
               describe the mood in words, or upload an image →
             </Link>
           </p>
+          <p className="text-stone-600 text-sm mt-2">
+            or{" "}
+            <Link href="/atlas" className="hover:text-stone-400 underline underline-offset-4 decoration-stone-800">
+              wander the map of every mood we know
+            </Link>
+          </p>
         </div>
 
         <p className="text-center text-stone-700 text-xs mt-10 mb-4">

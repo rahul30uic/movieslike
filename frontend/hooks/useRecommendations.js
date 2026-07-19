@@ -30,6 +30,9 @@ export const useRecommendations = () => {
     // Progress line for the in-browser engine (model downloads etc.)
     const [engineStatus, setEngineStatus] = useState(null);
 
+    // Patch-level heatmap explaining an image query's top match
+    const [explanation, setExplanation] = useState(null);
+
     /** Runs an in-browser engine call with shared load/error handling. */
     const runEngine = useCallback(async (fn) => {
         setIsLoading(true);
@@ -105,6 +108,7 @@ export const useRecommendations = () => {
 
         if (BROWSER_ENGINE) {
             setSelectedAnchor(null);
+            setExplanation(null);
             return runEngine((e) =>
                 e.searchText(query.trim(), { alpha, minVotes: 500, n: 12 }, setEngineStatus));
         }
@@ -149,8 +153,12 @@ export const useRecommendations = () => {
 
         if (BROWSER_ENGINE) {
             setSelectedAnchor(null);
-            return runEngine((e) =>
-                e.searchImage(file, { alpha, minVotes: 500, n: 12 }, setEngineStatus));
+            setExplanation(null);
+            return runEngine(async (e) => {
+                const res = await e.searchImage(file, { alpha, minVotes: 500, n: 12 }, setEngineStatus);
+                setExplanation(res.explanation);
+                return res.recommendations;
+            });
         }
 
         setSelectedAnchor(null);
@@ -182,5 +190,5 @@ export const useRecommendations = () => {
         }
     }, [alpha]);
 
-    return { selectedAnchor, setSelectedAnchor, alpha, setAlpha, movies, isLoading, error, engineStatus, fetchRecommendations, fetchByText, fetchByImage };
+    return { selectedAnchor, setSelectedAnchor, alpha, setAlpha, movies, isLoading, error, engineStatus, explanation, fetchRecommendations, fetchByText, fetchByImage };
 };
