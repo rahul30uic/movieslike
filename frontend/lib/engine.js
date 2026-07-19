@@ -12,10 +12,13 @@
  * first block, image queries the second, zeros elsewhere.
  */
 
-import { pipeline, AutoProcessor, SiglipVisionModel, RawImage } from "@huggingface/transformers";
+import { env, pipeline, AutoProcessor, SiglipVisionModel, RawImage } from "@huggingface/transformers";
 
+// The image tower is OUR LoRA-tuned SigLIP (+18.7% held-out, +8% end-to-end),
+// served as quantized ONNX from this site. Text model stays on the HF hub.
+env.localModelPath = "/models/";
 const TEXT_MODEL = "Xenova/bge-base-en-v1.5";
-const IMAGE_MODEL = "Xenova/siglip-base-patch16-224";
+const IMAGE_MODEL = "siglip-lora";
 const QUERY_PREFIX = "Represent this sentence for searching relevant passages: ";
 
 let state = null;      // { movies, vectors, dim, penalties }

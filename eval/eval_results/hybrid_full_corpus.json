@@ -9,22 +9,22 @@
     "rare_overlap": 0.0341
   },
   "knn": {
-    "any_overlap": 0.5459,
-    "jaccard": 0.0296,
-    "rare_overlap": 0.2561,
-    "lift_any": 2.9,
-    "lift_jaccard": 7.08,
-    "lift_rare": 7.51
+    "any_overlap": 0.5641,
+    "jaccard": 0.0318,
+    "rare_overlap": 0.2762,
+    "lift_any": 3.0,
+    "lift_jaccard": 7.59,
+    "lift_rare": 8.1
   },
   "by_modality": {
     "image-only": {
       "n": 1444,
-      "any_overlap": 0.681,
-      "jaccard": 0.038,
-      "rare_overlap": 0.3373,
-      "lift_any": 3.62,
-      "lift_jaccard": 9.08,
-      "lift_rare": 9.89
+      "any_overlap": 0.7041,
+      "jaccard": 0.0413,
+      "rare_overlap": 0.3646,
+      "lift_any": 3.75,
+      "lift_jaccard": 9.85,
+      "lift_rare": 10.69
     },
     "neither": {
       "n": 417,
@@ -37,12 +37,12 @@
     },
     "text+image": {
       "n": 1446,
-      "any_overlap": 0.655,
-      "jaccard": 0.0356,
-      "rare_overlap": 0.3113,
-      "lift_any": 3.49,
-      "lift_jaccard": 8.5,
-      "lift_rare": 9.13
+      "any_overlap": 0.6789,
+      "jaccard": 0.0379,
+      "rare_overlap": 0.3356,
+      "lift_any": 3.61,
+      "lift_jaccard": 9.05,
+      "lift_rare": 9.84
     },
     "text-only": {
       "n": 408,

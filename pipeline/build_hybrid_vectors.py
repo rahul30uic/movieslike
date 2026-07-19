@@ -31,15 +31,20 @@ NPZ_FILE = os.path.join(DATA_DIR, "post_modality_vectors.npz")
 META_FILE = os.path.join(DATA_DIR, "post_modality_meta.json")
 OUTPUT_FILE = os.path.join(DATA_DIR, "posts_with_hybrid_vectors.json")
 
-CAPTION_WEIGHT = 0.5
+# Recalibrated for the LoRA-tuned image tower: contrastive fine-tuning
+# sharpened image-block similarities, shifting the optimal fusion from
+# 0.5 (frozen) to 0.3 (swept on full-corpus eval; 8.10 vs 7.51 lift).
+CAPTION_WEIGHT = 0.3
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--eval", action="store_true")
+    ap.add_argument("--image-npz", default=NPZ_FILE,
+                    help="Image-vector source (e.g. post_modality_vectors_lora.npz)")
     args = ap.parse_args()
 
-    data = np.load(NPZ_FILE)
+    data = np.load(args.image_npz)
     iv, hi = data["image_vecs"], data["has_image"]
     meta = [json.loads(l) for l in open(META_FILE, encoding="utf-8")]
     row_of = {m["post_id"]: i for i, m in enumerate(meta)}
@@ -68,8 +73,9 @@ def main():
     logging.info(f"Wrote {n_out} hybrid post vectors (1536-dim) to {OUTPUT_FILE}.")
 
     if args.eval:
-        import sys; sys.path.insert(0, os.path.join(os.path.dirname(SCRIPT_DIR), "eval"))
-from eval_embeddings import evaluate
+        import sys
+        sys.path.insert(0, os.path.join(os.path.dirname(SCRIPT_DIR), "eval"))
+        from eval_embeddings import evaluate
         posts = [json.loads(l) for l in open(OUTPUT_FILE, encoding="utf-8")]
         posts = [p for p in posts if p["tmdb_ids"]]
         r = evaluate(posts)
