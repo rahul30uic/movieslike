@@ -1,0 +1,12 @@
+{
+  "baseline_val_rare_lift": 2.89,
+  "best": {
+    "epoch": 8,
+    "lift": 3.43
+  },
+  "gain_pct": 18.7,
+  "rank": 8,
+  "epochs": 14,
+  "n_train": 2312,
+  "n_val": 578
+}

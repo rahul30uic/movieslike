@@ -86,6 +86,17 @@
   nothing here. Verdict: caption+SigLIP+head is production. DINOv3 rerun
   pending HF license acceptance (`pipeline/encode_dino.py --model ...`).
 
+- **2026-07-18** — Interpretability shipped: /atlas (UMAP of the embedding
+  space with real thumbnails) + patch-level query heatmaps on image search.
+  Few-shot personalization shipped: per-device EWMA taste vector, disclosed
+  in UI. Both targeted at the Camera/Photos MLE role's JD.
+- **2026-07-18** — **LoRA fine-tune of SigLIP vision tower**: rank 8, q/v,
+  295k trainable params (0.32%), image-image InfoNCE with rare-movie-overlap
+  positives, honest 80/20 split. Val image-only rare-lift 2.89 → **3.43
+  (+18.7%)**, monotonic to epoch 8 then flat plateau to 14 (clean early
+  stop). Adapter: data/siglip_lora_best; curve: eval_results/siglip_lora.json.
+  Next candidate: re-encode corpus with tuned tower + rebuild web index.
+
 ## Known issues / risks
 
 - Posts with no descriptors AND no image get the embedding of `""` (garbage
