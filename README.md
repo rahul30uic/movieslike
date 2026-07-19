@@ -11,9 +11,9 @@ or, where words fail, by reacting to mood images. Full product thesis in
 [VISION.md](VISION.md); build state in [STATUS.md](STATUS.md).
 
 This repo is also an end-to-end ML case study: **a measurement-first embedding
-investigation that found the initial multimodal fusion was actively destroying
-signal, and fixed it for a +50% retrieval improvement** — every claim below is
-reproducible from a script in this repo.
+investigation that took retrieval quality from 5.0× to 8.1× over random —
+including a LoRA fine-tune that ships in the product and runs in your
+browser** — every claim below is reproducible from a script in this repo.
 
 ---
 
@@ -62,21 +62,43 @@ not by vibe.
    keeps both:
 
 ```
-post_vector = normalize([ 0.5 · bge(vibe_caption) ; 0.5 · siglip(images) ])
+post_vector = normalize([ w · bge(vibe_caption) ; (1-w) · siglip_tuned(images) ])
 ```
 
 Cosine similarity on the concatenation is the weighted sum of the per-space
-similarities, so the two spaces never need aligning — and text queries (a
-future chat interface) search the caption block natively.
+similarities, so the two spaces never need aligning — text queries search the
+caption block natively, image queries the image block.
 
-| Architecture (same population) | Rare-overlap lift |
-|---|---|
-| SigLIP 50/50 average (original) | 5.0× |
-| SigLIP, swept weight (w_text = 0.1) | 5.9× |
-| VLM captions alone (bge) | 4.8× |
-| **Hybrid concat (final)** | **7.5×** |
+### Then we trained on the corpus's own signal
 
-All numbers: [eval/eval_results/](eval/eval_results/).
+Rare-movie co-recommendation gives free contrastive supervision: posts whose
+commenters suggested the same obscure movie share a vibe, so their images
+are a positive pair. A **LoRA fine-tune of SigLIP's vision tower** (rank 8,
+295k trainable params = 0.3%, honest 80/20 split before pair building)
+improved held-out image retrieval **+18.7%** with a clean convergence curve
+([eval/eval_results/siglip_lora.json](eval/eval_results/siglip_lora.json)).
+
+Shipping it taught the best lesson in the repo: naively swapping the tuned
+tower **degraded** end-to-end retrieval — contrastive training sharpens the
+image-similarity distribution, which broke the fusion calibration. Re-sweeping
+the fusion weight (0.5 → 0.3) recovered it and more. Offline wins don't
+transfer until you re-tune the system around them; we caught it because
+everything gets measured before it ships.
+
+### Consolidated results (full corpus, n=3,715, rare-overlap lift@10 vs random)
+
+| Embedding version | Lift | 95% CI |
+|---|---|---|
+| SigLIP 50/50 average (original) | 5.0× | — |
+| SigLIP, swept fusion (w_text=0.1) | 6.6× | — |
+| VLM captions alone (bge) | 4.8× | — |
+| Hybrid concat, frozen towers | 7.5× | [7.27, 7.76] |
+| **Hybrid + LoRA tower + recalibrated fusion (shipped)** | **8.1×** | **[7.84, 8.35]** |
+
+Bootstrap over queries, B=2000 ([eval/bootstrap_ci.py](eval/bootstrap_ci.py));
+the shipped model's CI doesn't overlap the frozen baseline's. A 25-scenario
+human-rated golden set ([eval/golden_set.py](eval/golden_set.py)) complements
+the proxy metric. All numbers: [eval/eval_results/](eval/eval_results/).
 
 ### Does it feel right? (movie-level spot checks)
 
@@ -95,6 +117,22 @@ movie is the weighted average of the posts that recommend it, with shotgun
 None of these groupings follow genre tags — "neon urban loneliness" and
 "snowbound crime bleakness" are not TMDB categories. That's the vibe space
 working.
+
+### The whole engine runs in your browser
+
+The live demo has **no backend**: transformers.js runs the quantized
+encoders client-side — bge for text, and **our LoRA-tuned SigLIP** exported
+to ONNX (q8, 94MB, 0.984 cosine parity with the PyTorch tower) — against a
+static fp16 movie index. Free hosting, no cold starts, and the fine-tune is
+literally what embeds your uploads.
+
+The site also exposes the model's internals as features: a **UMAP atlas** of
+the embedding space rendered with the corpus images (`/atlas`), **patch-level
+heatmaps** showing which regions of an uploaded image drove its top match,
+a Bayesian **head-space probe** (pick-one-of-two mood images, posterior
+narrows live, five movies out — with a diffusion-generated rights-clean
+image pool as an alternative), and a **persistent taste vector**
+(few-shot personalization, user-resettable).
 
 ---
 
