@@ -197,19 +197,22 @@ const PROBE_CANDIDATES = 24; // B-candidates scored per round (each costs a pool
 // the posterior AND the images shown. Vectors ship as a small fp16 bin.
 let probePool = null; // { items: [{id, f}], vecs: Float32Array, dim }
 
+// "synth" = diffusion-generated pool (rights-clean); default = corpus posts
+const PROBE_SOURCE = process.env.NEXT_PUBLIC_PROBE_POOL === "synth" ? "probe_synth" : "probe_posts";
+
 async function loadProbe(onStatus) {
     if (!probePool) {
         await loadIndex(onStatus);
         onStatus?.("Loading probe images…");
         const [metaRes, binRes] = await Promise.all([
-            fetch("/engine/probe_posts.json"),
-            fetch("/engine/probe_posts.bin"),
+            fetch(`/engine/${PROBE_SOURCE}.json`),
+            fetch(`/engine/${PROBE_SOURCE}.bin`),
         ]);
         const meta = await metaRes.json();
         const raw = new Uint16Array(await binRes.arrayBuffer());
         const vecs = new Float32Array(raw.length);
         for (let i = 0; i < raw.length; i++) vecs[i] = halfToFloat(raw[i]);
-        probePool = { items: meta.posts, vecs, dim: meta.dim };
+        probePool = { items: meta.posts, vecs, dim: meta.dim, base: meta.base || "/probe_imgs/" };
         onStatus?.(null);
     }
     return probePool;
@@ -328,7 +331,7 @@ export async function probeNext(history, onStatus) {
 
     const toImg = (p) => ({
         post_id: p, // pool row index is the id the UI hands back in history
-        image_url: "/probe_imgs/" + probePool.items[p].f,
+        image_url: probePool.base + probePool.items[p].f,
     });
     return { round: history.length + 1, total_rounds: PROBE_ROUNDS, pair: [toImg(a), toImg(best)] };
 }
