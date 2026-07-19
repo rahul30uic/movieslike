@@ -310,5 +310,43 @@ export async function searchImage(fileOrUrl, opts, onStatus) {
     const target = new Float32Array(state.dim);
     target.set(v, state.dim - v.length); // image block
     onStatus?.(null);
-    return rank(target, opts);
+    const recommendations = rank(target, opts);
+
+    // --- Introspection: which regions of the upload drove the match? ---
+    // SigLIP patch tokens vs the top match's image block, as a spatial grid.
+    let explanation = null;
+    const patches = out.last_hidden_state; // [1, n_patches, 768]
+    if (patches && recommendations.length > 0) {
+        const [, nPatch, pDim] = patches.dims;
+        const half = state.dim / 2;
+        // First recommendation whose image block actually carries signal
+        let refVec = null, refTitle = null;
+        for (const rec of recommendations) {
+            const i = state.movies.findIndex((m) => m.id === rec.tmdb_id);
+            if (i < 0) continue;
+            const block = state.vectors.subarray(i * state.dim + half, (i + 1) * state.dim);
+            let norm = 0;
+            for (const x of block) norm += x * x;
+            if (Math.sqrt(norm) > 0.1) {
+                refVec = normalize(block);
+                refTitle = rec.title;
+                break;
+            }
+        }
+        if (refVec) {
+            const heat = new Float32Array(nPatch);
+            for (let j = 0; j < nPatch; j++) {
+                const patch = normalize(patches.data.subarray(j * pDim, (j + 1) * pDim));
+                heat[j] = dot(patch, refVec);
+            }
+            let lo = Infinity, hi = -Infinity;
+            for (const x of heat) { lo = Math.min(lo, x); hi = Math.max(hi, x); }
+            const range = hi - lo || 1;
+            const grid = Array.from(heat, (x) => ((x - lo) / range) ** 2); // gamma-sharpened
+            const side = Math.round(Math.sqrt(nPatch));
+            explanation = { grid, cols: side, rows: side, vs: refTitle, imageUrl: url };
+        }
+    }
+
+    return { recommendations, explanation };
 }
