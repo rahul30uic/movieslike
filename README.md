@@ -1,225 +1,149 @@
-# Movieslike
+# movieslike
 
-**A vibe-based movie discovery engine, built from 4,400 Reddit posts where people
-share an image or a mood and ask: "what movies feel like this?"**
+Find movies by feeling instead of genre.
 
-Streaming services cause choice paralysis — endless scrolling, and even after
-picking something, the nagging sense that something better is one scroll away.
-Movieslike inverts the interaction: instead of a wall of options, it converges
-you to a handful of movies that match your *head-space* — expressed in words,
-or, where words fail, by reacting to mood images. Full product thesis in
-[VISION.md](VISION.md); build state in [STATUS.md](STATUS.md).
+There's a subreddit called r/MoviesThatFeelLike where people post a photo or
+a mood — a foggy street, a neon diner — and ask "what movies feel like this?"
+The comments are full of surprisingly good answers. I scraped about 4,400 of
+those posts and turned them into a search engine.
 
-This repo is also an end-to-end ML case study: **a measurement-first embedding
-investigation that took retrieval quality from 5.0× to 8.1× over random —
-including a LoRA fine-tune that ships in the product and runs in your
-browser** — every claim below is reproducible from a script in this repo.
+You can describe a mood in words, upload any image that feels right, or just
+react to pairs of images and let the app figure out your headspace. It gives
+you five movies, not five hundred. That's the point — I built this because I
+was tired of scrolling Netflix for 40 minutes and watching nothing.
 
----
+## how it works
 
-## The interesting part: evaluation without labels
+Every post gets a "vibe fingerprint": a vector made of two halves.
 
-"Do these two Reddit posts express the same vibe?" has no ground-truth labels —
-but the corpus contains a signal nobody has to annotate: **each post's comment
-section is a crowd-validated answer key** (the movies people recommended,
-verified against TMDB). If two posts' commenters recommend overlapping movies,
-the posts almost certainly share a vibe.
+- **words half:** Gemini looks at the post (image + title + mood tags) and
+  writes a short paragraph describing the vibe. A sentence-embedding model
+  (bge) turns that paragraph into numbers.
+- **picture half:** SigLIP embeds the images directly.
 
-The eval ([eval/eval_embeddings.py](eval/eval_embeddings.py)): for every post,
-retrieve its 10 nearest neighbors in embedding space and measure movie-overlap
-against a random-pairs baseline. The headline metric is **rare-overlap lift** —
-overlap counting only movies *outside* the popularity head, because surfacing
-the long tail is the whole point (every vibe query would otherwise collapse to
-Blade Runner).
+The two halves get concatenated. Then every *movie* gets its own fingerprint:
+the weighted average of all the posts where people recommended it (a post
+that shotguns 50 movie titles counts less than one that gives 3). Search is
+just cosine similarity against ~17k movie vectors, plus a penalty on movies
+that Reddit recommends for literally everything (looking at you, Blade
+Runner), and a floor on TMDB vote count so you don't get movies nobody can
+find.
 
-### What the eval revealed
+## how I know it works
 
-The initial architecture embedded descriptor tags and images with SigLIP and
-averaged them 50/50. The eval showed this was hurting:
+There are no labels for "these two posts have the same vibe", but there's a
+trick: if two posts' commenters recommended the same *obscure* movie, the
+posts almost certainly share a vibe. So the eval is: take a post, find its
+nearest neighbors in embedding space, check how often they share rare movies,
+and compare against random pairs.
 
-| Post type | Rare-overlap lift vs random (baseline) |
-|---|---|
-| image-only | **8.2×** — images carry real vibe signal |
-| text + image | 4.6× — *worse than image-only: the text average dilutes it* |
-| text-only | **0.2× — below random** |
+That number caught real problems. The first version averaged text and image
+embeddings 50/50, and the eval showed the text side was scoring *below
+random* — SigLIP's text encoder just can't handle bags of mood words, and
+averaging was dragging the good image vectors down with it. Every version
+since had to beat the previous number:
 
-SigLIP's text tower, trained on alt-text captions, embeds descriptor bags like
-`"gritty lonely hopeless neo futurism"` somewhere useless — and the classic
-CLIP *modality gap* means text-only and image-only posts cluster by modality,
-not by vibe.
-
-### Two fixes, both measured
-
-1. **Re-weight the fusion** ([eval/sweep_fusion.py](eval/sweep_fusion.py)):
-   sweeping the text weight found the optimum at 0.1, not 0.5 → **+29%** for a
-   one-line change.
-2. **Fuse in language instead of vector space**
-   ([pipeline/generate_vibe_captions.py](pipeline/generate_vibe_captions.py)):
-   a VLM (Gemini) reads each post's images + title + descriptors and writes one
-   unified vibe paragraph, which a proper sentence encoder (bge-base) embeds.
-   Captions alone rescued the broken text-only posts (0.2× → 2.3×) but lost
-   visual nuance on image posts (5.5× vs ~7×) — so the final architecture
-   keeps both:
-
-```
-post_vector = normalize([ w · bge(vibe_caption) ; (1-w) · siglip_tuned(images) ])
-```
-
-Cosine similarity on the concatenation is the weighted sum of the per-space
-similarities, so the two spaces never need aligning — text queries search the
-caption block natively, image queries the image block.
-
-### Then we trained on the corpus's own signal
-
-Rare-movie co-recommendation gives free contrastive supervision: posts whose
-commenters suggested the same obscure movie share a vibe, so their images
-are a positive pair. A **LoRA fine-tune of SigLIP's vision tower** (rank 8,
-295k trainable params = 0.3%, honest 80/20 split before pair building)
-improved held-out image retrieval **+18.7%** with a clean convergence curve
-([eval/eval_results/siglip_lora.json](eval/eval_results/siglip_lora.json)).
-
-Shipping it taught the best lesson in the repo: naively swapping the tuned
-tower **degraded** end-to-end retrieval — contrastive training sharpens the
-image-similarity distribution, which broke the fusion calibration. Re-sweeping
-the fusion weight (0.5 → 0.3) recovered it and more. Offline wins don't
-transfer until you re-tune the system around them; we caught it because
-everything gets measured before it ships.
-
-### Consolidated results (full corpus, n=3,715, rare-overlap lift@10 vs random)
-
-| Embedding version | Lift | 95% CI |
+| version | lift over random | 95% CI |
 |---|---|---|
-| SigLIP 50/50 average (original) | 5.0× | — |
-| SigLIP, swept fusion (w_text=0.1) | 6.6× | — |
-| VLM captions alone (bge) | 4.8× | — |
-| Hybrid concat, frozen towers | 7.5× | [7.27, 7.76] |
-| **Hybrid + LoRA tower + recalibrated fusion (shipped)** | **8.1×** | **[7.84, 8.35]** |
+| siglip, 50/50 text+image average | 5.0x | |
+| siglip, fusion weight swept | 6.6x | |
+| gemini captions alone | 4.8x | |
+| hybrid (captions + images) | 7.5x | [7.3, 7.8] |
+| hybrid + LoRA fine-tune (what's live now) | **8.1x** | [7.8, 8.4] |
 
-Bootstrap over queries, B=2000 ([eval/bootstrap_ci.py](eval/bootstrap_ci.py));
-the shipped model's CI doesn't overlap the frozen baseline's. A 25-scenario
-human-rated golden set ([eval/golden_set.py](eval/golden_set.py)) complements
-the proxy metric. All numbers: [eval/eval_results/](eval/eval_results/).
+The LoRA row: I fine-tuned SigLIP's vision tower (rank 8, only 295k params)
+using the corpus's own signal as supervision — images from posts that share a
+rare movie are positive pairs. On held-out posts it improved image retrieval
+by 18.7%.
 
-### Does it feel right? (movie-level spot checks)
+Shipping it was its own lesson. Dropping the tuned model into the pipeline
+actually made end-to-end retrieval *worse* at first — contrastive training
+changes the spread of the similarity scores, which broke the old mixing
+weight between the two halves. Re-tuning that one number fixed it and then
+some. Offline wins don't automatically transfer; measure before you ship.
 
-Post vectors aggregate into **movie-level vibe vectors**
-([pipeline/build_movie_vectors.py](pipeline/build_movie_vectors.py)) — each
-movie is the weighted average of the posts that recommend it, with shotgun
-50-movie threads down-weighted. Nearest neighbors in the hybrid space:
+There's also a small human eval (25 mood scenarios, rated by hand) in
+`eval/golden_set.py`, because the rare-movie-overlap metric is a proxy and I
+wanted an independent check on it.
 
-| Query | Nearest movies by vibe |
+Sanity check that the space is real — nearest movies by vibe:
+
+- *Lost in Translation* → Chungking Express, Her, Fallen Angels
+- *The Thing* → Jacob's Ladder, In the Mouth of Madness, The Void
+- *Fargo* → Winter's Bone, True Detective, Prisoners
+
+None of that follows genre tags. "Neon urban loneliness" is not a TMDB
+category.
+
+## the whole thing runs in your browser
+
+There's no backend. transformers.js runs the models client-side: bge for
+text, and my LoRA-tuned SigLIP exported to quantized ONNX (94MB, cosine
+0.984 vs the pytorch version) for images. The movie index is a static 29MB
+file. First visit downloads the models, after that it's all local. Free to
+host, nothing to keep alive, and the fine-tune is literally what embeds your
+uploads.
+
+Some extras I built because I wanted to see inside the model:
+
+- `/atlas` — a UMAP map of the whole embedding space, drawn with the actual
+  corpus images. The foggy-coast region and the neon-city region are real
+  neighborhoods the model found on its own.
+- upload an image and you get a heatmap showing *which parts of your image*
+  drove the top match (SigLIP patch tokens scored against the matched
+  movie's vector).
+- the probe (the landing page) is a little Bayesian machine: each pick
+  between two images reweights a posterior over 500 mood particles, pairs
+  are chosen to split the remaining uncertainty, and you can watch the
+  "mood lock" meter fill as it converges. There's also a diffusion-generated
+  image pool as a rights-clean alternative to the Reddit images.
+- it remembers your taste across sessions (locally, resettable) and blends
+  it lightly into rankings.
+
+## repo layout
+
+| folder | what |
 |---|---|
-| *Lost in Translation* | Chungking Express · Her · Fallen Angels · All of Us Strangers · Eternal Sunshine |
-| *The Thing* | Jacob's Ladder · The Void · In the Mouth of Madness · The Empty Man |
-| *Fargo* | Winter's Bone · True Detective · The Place Beyond the Pines · Prisoners · Insomnia |
-| *Paris, Texas* | No Country for Old Men · Nocturnal Animals · My Own Private Idaho |
+| `pipeline/` | scraping → verification → captions → embeddings → indexes |
+| `eval/` | the eval harness + every result as json |
+| `frontend/` | next.js app, browser inference in `lib/engine.js` |
+| `api/` | fastapi server (only needed for local dev now) |
+| `data/` | gitignored; everything regenerable via pipeline |
 
-None of these groupings follow genre tags — "neon urban loneliness" and
-"snowbound crime bleakness" are not TMDB categories. That's the vibe space
-working.
-
-### The whole engine runs in your browser
-
-The live demo has **no backend**: transformers.js runs the quantized
-encoders client-side — bge for text, and **our LoRA-tuned SigLIP** exported
-to ONNX (q8, 94MB, 0.984 cosine parity with the PyTorch tower) — against a
-static fp16 movie index. Free hosting, no cold starts, and the fine-tune is
-literally what embeds your uploads.
-
-The site also exposes the model's internals as features: a **UMAP atlas** of
-the embedding space rendered with the corpus images (`/atlas`), **patch-level
-heatmaps** showing which regions of an uploaded image drove its top match,
-a Bayesian **head-space probe** (pick-one-of-two mood images, posterior
-narrows live, five movies out — with a diffusion-generated rights-clean
-image pool as an alternative), and a **persistent taste vector**
-(few-shot personalization, user-resettable).
-
----
-
-## Architecture
-
-```
-r/MoviesThatFeelLike (4,418 posts, images, 90k comments)
-        │  scrape
-        ▼
-┌─ pipeline/ ───────────────────────────────────────────────┐
-│ extract_and_verify_movies.py   Llama-3.1 pulls titles     │
-│                                from comments → TMDB verify │
-│ extract_vibe_tags_from_reddit  vibe descriptors per post   │
-│ generate_vibe_captions.py      Gemini: images+text → one   │
-│                                unified vibe paragraph      │
-│ encode_modalities.py           SigLIP image vectors        │
-│ embed_captions.py              bge-base caption vectors    │
-│ build_hybrid_vectors.py        [0.5·caption ; 0.5·image]   │
-│ build_movie_vectors.py         post → movie aggregation    │
-└────────────────────────────────────────────────────────────┘
-        │ 3,715 post vectors · 17,174 movie vectors
-        ▼
-┌─ eval/ ──────────────┐   ┌─ api/ ─────────────────────────┐
-│ eval_embeddings.py   │   │ FastAPI /recommendations:      │
-│ movie-overlap metric │   │ cosine retrieval + popularity  │
-│ + eval_results/      │   │ debiasing (α slider)           │
-└──────────────────────┘   └────────────┬───────────────────┘
-                                        ▼
-                           ┌─ frontend/ ────────────────────┐
-                           │ Next.js: vibe-anchor grid,     │
-                           │ penalty slider, movie grid     │
-                           └────────────────────────────────┘
-```
-
-The retrieval layer includes **popularity debiasing**: a movie's score is
-`local_count / global_count^α`, with α user-controlled — at α=0 you get the
-crowd favorites, at α=1 the obscure Czech film that nails the vibe.
-
-## Repo layout
-
-| Path | What |
-|---|---|
-| `pipeline/` | Data pipeline, in run order (see Reproduce) |
-| `eval/` | Eval harness + tracked results for every embedding version |
-| `api/` | FastAPI retrieval backend |
-| `frontend/` | Next.js demo (vibe anchors → recommendations) |
-| `experiments/` | Clustering visualizations, scratch analysis |
-| `data/` | All datasets/vectors/images — gitignored, regenerable |
-
-## Reproduce
+## running it
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt          # + a TMDB and Gemini key in pipeline/.env
+pip install -r requirements.txt   # TMDB + Gemini keys in .env for the pipeline
 
-# pipeline (each step caches; rerun-safe)
-python pipeline/extract_and_verify_movies.py      # comments → verified movies (TMDB)
-python pipeline/extract_vibe_tags_from_reddit.py  # descriptors (local Ollama)
-python pipeline/generate_vibe_captions.py         # VLM vibe captions (Gemini, ~$5)
-python pipeline/encode_modalities.py              # SigLIP image/text vectors
-python pipeline/embed_captions.py                 # bge caption vectors
-python pipeline/build_hybrid_vectors.py --eval    # final post vectors + eval
-python pipeline/build_movie_vectors.py --posts-file data/posts_with_hybrid_vectors.json
+# pipeline, in order (each step caches)
+python pipeline/extract_and_verify_movies.py
+python pipeline/extract_vibe_tags_from_reddit.py
+python pipeline/generate_vibe_captions.py        # ~$5 of Gemini
+python pipeline/encode_modalities.py
+python pipeline/embed_captions.py
+python pipeline/train_siglip_lora.py             # optional but worth it
+python pipeline/ship_lora.py
+python pipeline/build_hybrid_vectors.py --image-npz data/post_modality_vectors_lora.npz
+python pipeline/build_movie_vectors.py --posts-file data/posts_with_hybrid_vectors.json --output data/movie_vectors_hybrid.json
+python pipeline/export_web_index.py
 
-# demo
-uvicorn main:app --port 8000 --app-dir api        # backend
-cd frontend && npm i && npm run dev               # http://localhost:3000
+# frontend
+cd frontend && npm i && NEXT_PUBLIC_USE_BROWSER_ENGINE=true npm run dev
 ```
 
-## Honest limitations
+## known problems
 
-- **Corpus skew:** r/MoviesThatFeelLike leans atmospheric/moody — coverage is
-  deep for "foggy seaside dread," thin for "fun date-night comedy." 4,792
-  movies have ≥5 supporting posts; the 45% with a single post get noisy vectors.
-- **Verification noise:** TMDB title matching has known misses (a 1978 thriller
-  matched to a 2019 docuseries); the verify step needs a disambiguation pass.
-- **Text-only posts** (8% of corpus) sit in a caption-only subspace and still
-  underperform in the hybrid space — candidate fix is image-block imputation.
-- The eval signal (movie co-recommendation) is a proxy for vibe similarity,
-  not a human judgment — it's calibrated against a random baseline, but a
-  small human-rated golden set is the natural next validation step.
+- the corpus skews moody/atmospheric. it's deep on "foggy seaside dread",
+  thin on "fun date-night comedy". about 45% of movies have only one
+  supporting post, so their vectors are noisy.
+- TMDB title matching has some wrong matches I haven't cleaned up yet (a
+  1978 thriller got matched to a 2019 docuseries in ~200 posts).
+- the training signal and the eval metric come from the same source
+  (co-recommendation), which is why the human golden set exists — the split
+  rules out memorization but not the signal's own biases.
+- text-only posts (~8% of corpus) still retrieve badly. known, unfixed.
 
-## Roadmap
-
-Next up (tracked in [STATUS.md](STATUS.md)): a contrastive projection head
-trained on movie-overlap positives (the corpus supervises its own metric
-learning), a text-query endpoint (bge-embed the user's words, search the
-caption block), and the product's signature interaction — adaptive
-image-probe rounds that triangulate your head-space through forced choices
-between contrasting moods.
+Movie data from [TMDB](https://www.themoviedb.org). This product uses the
+TMDB APIs but is not endorsed or certified by TMDB. Mood images come from
+public Reddit posts; rights remain with their owners — contact for removal.
