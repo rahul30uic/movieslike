@@ -1,0 +1,41 @@
+[
+  {
+    "scheme": "uniform",
+    "n_train_posts": 2639,
+    "n_test_posts_scored": 655,
+    "n_test_excluded_no_relevant_in_index": 4,
+    "n_movies_in_index": 15549,
+    "relevant_set_size_mean": 30.8,
+    "MRR": 0.2984,
+    "Hit@10": 0.5542,
+    "Recall@5": 0.0242,
+    "Recall@10": 0.0473,
+    "AgreementWeightedRecall@10": 0.0803
+  },
+  {
+    "scheme": "log_shotgun",
+    "n_train_posts": 2639,
+    "n_test_posts_scored": 655,
+    "n_test_excluded_no_relevant_in_index": 4,
+    "n_movies_in_index": 15549,
+    "relevant_set_size_mean": 30.8,
+    "MRR": 0.2875,
+    "Hit@10": 0.5481,
+    "Recall@5": 0.0241,
+    "Recall@10": 0.0456,
+    "AgreementWeightedRecall@10": 0.0779
+  },
+  {
+    "scheme": "upvote",
+    "n_train_posts": 2639,
+    "n_test_posts_scored": 655,
+    "n_test_excluded_no_relevant_in_index": 4,
+    "n_movies_in_index": 15549,
+    "relevant_set_size_mean": 30.8,
+    "MRR": 0.3115,
+    "Hit@10": 0.5634,
+    "Recall@5": 0.027,
+    "Recall@10": 0.0476,
+    "AgreementWeightedRecall@10": 0.0849
+  }
+]

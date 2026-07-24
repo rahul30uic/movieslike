@@ -1,0 +1,13 @@
+{
+  "scheme": "log_shotgun",
+  "n_train_posts": 2639,
+  "n_test_posts_scored": 655,
+  "n_test_excluded_no_relevant_in_index": 4,
+  "n_movies_in_index": 15549,
+  "relevant_set_size_mean": 30.8,
+  "MRR": 0.2875,
+  "Hit@10": 0.5481,
+  "Recall@5": 0.0241,
+  "Recall@10": 0.0456,
+  "AgreementWeightedRecall@10": 0.0779
+}

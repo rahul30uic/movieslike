@@ -35,9 +35,11 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "data")
 POSTS_FILE = os.path.join(DATA_DIR, "posts_with_vectors.json")
 PHASE1_FILE = os.path.join(DATA_DIR, "phase1_extracted_movies_fresh_run.json")
+EDGES_FILE = os.path.join(DATA_DIR, "movie_edge_scores.jsonl")
 OUTPUT_FILE = os.path.join(DATA_DIR, "movie_vectors.json")
 
 MIN_SUPPORT_FOR_DEMO = 3  # only show demo neighbors among movies with >= N posts
+UPVOTE_FLOOR = 0.05       # a movie the crowd ignored still contributes a little
 
 
 def has_signal(post):
@@ -88,7 +90,29 @@ def load_movie_details():
     return details
 
 
-def build_vectors(posts):
+def load_edge_agreement():
+    """(post_id, tmdb_id) -> within-post upvote agreement in [0,1]."""
+    agree = {}
+    if not os.path.exists(EDGES_FILE):
+        return agree
+    with open(EDGES_FILE, encoding="utf-8") as f:
+        for line in f:
+            e = json.loads(line)
+            a = e.get("agreement_norm")
+            if a is not None:
+                agree[(e["post_id"], e["tmdb_id"])] = a
+    return agree
+
+
+def build_vectors(posts, weighting="upvote", agree=None):
+    """Aggregate post vectors into per-movie vectors.
+
+    weighting:
+      upvote       edge weight = UPVOTE_FLOOR + within-post crowd agreement
+                   (best on the held-out post->movie eval, +8% MRR)
+      log_shotgun  edge weight = 1 / log2(1 + n_movies_in_post) [legacy]
+    """
+    agree = agree or {}
     sums = defaultdict(lambda: None)
     weights = defaultdict(float)
     support = defaultdict(int)
@@ -99,8 +123,12 @@ def build_vectors(posts):
         if norm == 0:
             continue
         vec = vec / norm
-        w = 1.0 / math.log2(1 + len(p["tmdb_ids"]))
+        shotgun_w = 1.0 / math.log2(1 + len(p["tmdb_ids"]))
         for tid in set(p["tmdb_ids"]):
+            if weighting == "upvote":
+                w = UPVOTE_FLOOR + agree.get((p["post_id"], tid), 0.0)
+            else:
+                w = shotgun_w
             sums[tid] = vec * w if sums[tid] is None else sums[tid] + vec * w
             weights[tid] += w
             support[tid] += 1
@@ -165,11 +193,19 @@ def main():
     ap.add_argument("--posts-file", default=POSTS_FILE,
                     help="Post vectors JSONL (e.g. posts_with_hybrid_vectors.json).")
     ap.add_argument("--output", default=OUTPUT_FILE)
+    ap.add_argument("--weighting", default="upvote", choices=["upvote", "log_shotgun"],
+                    help="Edge weighting for aggregation (default: upvote, the eval winner).")
     args = ap.parse_args()
 
     posts = load_posts(args.posts_file)
     details = load_movie_details()
-    movies = build_vectors(posts)
+    agree = load_edge_agreement() if args.weighting == "upvote" else {}
+    if args.weighting == "upvote" and not agree:
+        logging.warning("No movie_edge_scores.jsonl found — falling back to log_shotgun weighting.")
+        args.weighting = "log_shotgun"
+    logging.info(f"Aggregating with '{args.weighting}' weighting "
+                 f"({len(agree)} scored edges).")
+    movies = build_vectors(posts, weighting=args.weighting, agree=agree)
 
     with open(args.output, "w", encoding="utf-8") as f:
         for tid, m in movies.items():
