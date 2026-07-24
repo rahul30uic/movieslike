@@ -1,0 +1,47 @@
+{
+  "wmean": {
+    "MRR": 0.3115,
+    "Hit@10": 0.5634,
+    "Recall@5": 0.027,
+    "Recall@10": 0.0476,
+    "wRecall@10": 0.0849,
+    "n_prototypes": 15549,
+    "n_movies": 15549
+  },
+  "trimmed": {
+    "MRR": 0.3557,
+    "Hit@10": 0.6061,
+    "Recall@5": 0.0336,
+    "Recall@10": 0.0558,
+    "wRecall@10": 0.1081,
+    "n_prototypes": 15549,
+    "n_movies": 15549
+  },
+  "medoid": {
+    "MRR": 0.0956,
+    "Hit@10": 0.2351,
+    "Recall@5": 0.0056,
+    "Recall@10": 0.0128,
+    "wRecall@10": 0.0202,
+    "n_prototypes": 15549,
+    "n_movies": 15549
+  },
+  "randproto": {
+    "MRR": 0.3367,
+    "Hit@10": 0.5832,
+    "Recall@5": 0.0309,
+    "Recall@10": 0.0528,
+    "wRecall@10": 0.0983,
+    "n_prototypes": 17585,
+    "n_movies": 15549
+  },
+  "multiproto": {
+    "MRR": 0.3954,
+    "Hit@10": 0.6473,
+    "Recall@5": 0.0368,
+    "Recall@10": 0.0633,
+    "wRecall@10": 0.1145,
+    "n_prototypes": 17585,
+    "n_movies": 15549
+  }
+}

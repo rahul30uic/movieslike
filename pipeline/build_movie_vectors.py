@@ -40,6 +40,8 @@ OUTPUT_FILE = os.path.join(DATA_DIR, "movie_vectors.json")
 
 MIN_SUPPORT_FOR_DEMO = 3  # only show demo neighbors among movies with >= N posts
 UPVOTE_FLOOR = 0.05       # a movie the crowd ignored still contributes a little
+TRIM_FRAC = 0.25          # drop this fraction of most-off-vibe posts before averaging
+TRIM_MIN_SUPPORT = 5      # only trim when there are enough posts to spare
 
 
 def has_signal(post):
@@ -104,18 +106,39 @@ def load_edge_agreement():
     return agree
 
 
-def build_vectors(posts, weighting="upvote", agree=None):
+def _weighted_mean(V, w):
+    s = w.sum()
+    if abs(s) < 1e-6:  # net-zero signed weights: fall back to plain mean
+        return V.mean(0)
+    return (V * w[:, None]).sum(0) / s
+
+
+def _aggregate(V, w, aggregation):
+    """Combine a movie's member post-vectors into one vector."""
+    if aggregation == "trimmed" and len(V) >= TRIM_MIN_SUPPORT:
+        c = _weighted_mean(V, w)
+        c = c / (np.linalg.norm(c) + 1e-9)
+        sims = V @ c
+        keep = sims >= np.quantile(sims, TRIM_FRAC)  # drop the most off-vibe posts
+        V, w = V[keep], w[keep]
+    return _weighted_mean(V, w)
+
+
+def build_vectors(posts, weighting="upvote", agree=None, aggregation="trimmed"):
     """Aggregate post vectors into per-movie vectors.
 
-    weighting:
+    weighting (per-edge contribution):
       upvote       edge weight = UPVOTE_FLOOR + within-post crowd agreement
-                   (best on the held-out post->movie eval, +8% MRR)
+                   (+8% MRR on held-out post->movie vs the legacy heuristic)
       log_shotgun  edge weight = 1 / log2(1 + n_movies_in_post) [legacy]
+
+    aggregation (how a movie's posts combine):
+      trimmed      weighted mean after dropping the TRIM_FRAC most off-vibe
+                   posts (+13% MRR; robust to outlier recommendations)
+      mean         plain weighted mean
     """
     agree = agree or {}
-    sums = defaultdict(lambda: None)
-    weights = defaultdict(float)
-    support = defaultdict(int)
+    members = defaultdict(list)   # tid -> [(unit_vec, weight), ...]
 
     for p in posts:
         vec = np.asarray(p["combined_vector"], dtype=np.float32)
@@ -125,20 +148,18 @@ def build_vectors(posts, weighting="upvote", agree=None):
         vec = vec / norm
         shotgun_w = 1.0 / math.log2(1 + len(p["tmdb_ids"]))
         for tid in set(p["tmdb_ids"]):
-            if weighting == "upvote":
-                w = UPVOTE_FLOOR + agree.get((p["post_id"], tid), 0.0)
-            else:
-                w = shotgun_w
-            sums[tid] = vec * w if sums[tid] is None else sums[tid] + vec * w
-            weights[tid] += w
-            support[tid] += 1
+            w = (UPVOTE_FLOOR + agree.get((p["post_id"], tid), 0.0)
+                 if weighting == "upvote" else shotgun_w)
+            members[tid].append((vec, w))
 
     movies = {}
-    for tid, s in sums.items():
-        v = s / weights[tid]
+    for tid, mem in members.items():
+        V = np.stack([m[0] for m in mem])
+        w = np.asarray([m[1] for m in mem], dtype=np.float32)
+        v = _aggregate(V, w, aggregation)
         n = np.linalg.norm(v)
         if n > 0:
-            movies[tid] = {"vector": v / n, "n_posts": support[tid]}
+            movies[tid] = {"vector": v / n, "n_posts": len(mem)}
     return movies
 
 
@@ -195,6 +216,8 @@ def main():
     ap.add_argument("--output", default=OUTPUT_FILE)
     ap.add_argument("--weighting", default="upvote", choices=["upvote", "log_shotgun"],
                     help="Edge weighting for aggregation (default: upvote, the eval winner).")
+    ap.add_argument("--aggregation", default="trimmed", choices=["trimmed", "mean"],
+                    help="How a movie's posts combine (default: trimmed, +13% MRR).")
     args = ap.parse_args()
 
     posts = load_posts(args.posts_file)
@@ -203,9 +226,10 @@ def main():
     if args.weighting == "upvote" and not agree:
         logging.warning("No movie_edge_scores.jsonl found — falling back to log_shotgun weighting.")
         args.weighting = "log_shotgun"
-    logging.info(f"Aggregating with '{args.weighting}' weighting "
+    logging.info(f"Aggregating with '{args.weighting}' weighting + '{args.aggregation}' "
                  f"({len(agree)} scored edges).")
-    movies = build_vectors(posts, weighting=args.weighting, agree=agree)
+    movies = build_vectors(posts, weighting=args.weighting, agree=agree,
+                           aggregation=args.aggregation)
 
     with open(args.output, "w", encoding="utf-8") as f:
         for tid, m in movies.items():
