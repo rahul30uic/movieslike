@@ -1,0 +1,63 @@
+{
+  "embeddings_file": "posts_with_hybrid_vectors.json",
+  "space": "LoRA-tuned hybrid, w_cap=0.3 (production)",
+  "params": {
+    "k": 10,
+    "rarity": "production: movie outside top-5% frequency head (freq < 29); 913 head movies of 17510",
+    "population": "3715 posts with vector + >=1 tmdb_id, no modality filter",
+    "random_pairs": 200000,
+    "seed": 42
+  },
+  "absolute_rates": {
+    "random_pairs_rare_rate": 0.0341,
+    "neighbor_pairs_rare_rate": 0.2762,
+    "lift": 8.1,
+    "k": 10,
+    "n_posts": 3715
+  },
+  "retrieval_metrics": {
+    "n_queries_scored": 3521,
+    "n_queries_excluded_empty_relevant": 194,
+    "relevant_set_size_mean": 133.7,
+    "relevant_set_size_median": 103,
+    "recall_at_5": 0.0137,
+    "recall_at_10": 0.0239,
+    "mrr": 0.4956
+  },
+  "sensitivity_support_bands": {
+    "note": "DIFFERENT rarity notion than production (absolute support range, not quantile head exclusion). Production reference below.",
+    "production_reference_lift": 8.1,
+    "bands": [
+      {
+        "band": [
+          5,
+          10
+        ],
+        "n_movies_in_band": 2368,
+        "neighbor_rate": 0.1004,
+        "random_rate": 0.0067,
+        "lift": 14.93
+      },
+      {
+        "band": [
+          5,
+          20
+        ],
+        "n_movies_in_band": 3586,
+        "neighbor_rate": 0.2081,
+        "random_rate": 0.0214,
+        "lift": 9.73
+      },
+      {
+        "band": [
+          5,
+          50
+        ],
+        "n_movies_in_band": 4534,
+        "neighbor_rate": 0.3795,
+        "random_rate": 0.0675,
+        "lift": 5.62
+      }
+    ]
+  }
+}
