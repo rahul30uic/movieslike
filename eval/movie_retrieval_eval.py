@@ -128,12 +128,28 @@ def evaluate(posts, scheme, agree):
     train = [posts[i] for i in order[n_val:]]
 
     ids, mat = build_movie_index(train, scheme, agree)
-    idx_of = {tid: i for i, tid in enumerate(ids)}
     train_ids = set(ids)
+    # train support per movie, for the tail breakdown
+    support = defaultdict(int)
+    for p in train:
+        for t in set(p["tmdb_ids"]):
+            support[t] += 1
+
+    TIERS = [("1", 1, 1), ("2-4", 2, 4), ("5-9", 5, 9), ("10-24", 10, 24), ("25+", 25, 10**9)]
+
+    def tier_of(t):
+        s = support[t]
+        for name, lo, hi in TIERS:
+            if lo <= s <= hi:
+                return name
+        return "1"
 
     mrr, hit10, rec = [], [], {k: [] for k in KS}
     wrec10, rel_sizes = [], []
     n_excluded = 0
+    # per-relevant-(post,movie) rank+tier, pooled for the tail breakdown
+    tier_hits = {name: [] for name, _, _ in TIERS}  # 1.0/0.0 in-top-10
+    tier_rr = {name: [] for name, _, _ in TIERS}     # reciprocal rank
 
     for p in test:
         relevant = [t for t in set(p["tmdb_ids"]) if t in train_ids]
@@ -154,13 +170,21 @@ def evaluate(posts, scheme, agree):
             rec[k].append(hits / len(relevant))
         hit10.append(1.0 if ranks[0] <= 10 else 0.0)
 
-        # agreement-weighted recall@10: of the crowd-agreement mass over this
-        # post's relevant movies, how much sits in the top 10.
+        for t in relevant:
+            tn = tier_of(t)
+            tier_hits[tn].append(1.0 if rank_of[t] <= 10 else 0.0)
+            tier_rr[tn].append(1.0 / rank_of[t])
+
         gains = {t: agree.get((p["post_id"], t), 0.0) for t in relevant}
         total_g = sum(gains.values())
         if total_g > 0:
             got = sum(g for t, g in gains.items() if rank_of[t] <= 10)
             wrec10.append(got / total_g)
+
+    by_tier = {name: {"n_pairs": len(tier_hits[name]),
+                      "recall@10": round(float(np.mean(tier_hits[name])), 4) if tier_hits[name] else None,
+                      "mrr": round(float(np.mean(tier_rr[name])), 4) if tier_rr[name] else None}
+               for name, _, _ in TIERS}
 
     return {
         "scheme": scheme,
@@ -174,6 +198,7 @@ def evaluate(posts, scheme, agree):
         "Recall@5": round(float(np.mean(rec[5])), 4),
         "Recall@10": round(float(np.mean(rec[10])), 4),
         "AgreementWeightedRecall@10": round(float(np.mean(wrec10)), 4) if wrec10 else None,
+        "by_support_tier": by_tier,
     }
 
 

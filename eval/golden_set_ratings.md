@@ -6,14 +6,14 @@ Rate the FIT, not whether you personally love the film.
 
 ## 1. "cozy rainy night, gentle loneliness, warm lamplight"
 - [ ] Win Win
-- [ ] Hachi: A Dog's Tale
-- [ ] Doctor Strange in the Multiverse of Madness
-- [ ] Hacksaw Ridge
-- [ ] Small Things Like These
+- [y] Hachi: A Dog's Tale
+- [n] Doctor Strange in the Multiverse of Madness
+- [n] Hacksaw Ridge
+- [y] Small Things Like These
 
 ## 2. "neon-lit city at 3am, wide awake and a little lost"
-- [ ] The Pitt
-- [ ] The King of Staten Island
+- [y] The Pitt
+- [n] The King of Staten Island
 - [ ] Single White Female
 - [ ] Batman: The Killing Joke
 - [ ] Win Win
@@ -21,7 +21,7 @@ Rate the FIT, not whether you personally love the film.
 ## 3. "slow-burn dread in a small town where everyone smiles too much"
 - [ ] Copycat
 - [ ] Hacksaw Ridge
-- [ ] The Wretched
+- [y] The Wretched
 - [ ] Hachi: A Dog's Tale
 - [ ] High Noon
 

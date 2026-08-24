@@ -14,7 +14,7 @@ node_modules/
 # macOS
 .DS_Store
 
-# Claude Code local settings
+# Local editor/agent settings
 .claude/
 
 # All datasets, vectors, images, caches — regenerable via pipeline/; keep out

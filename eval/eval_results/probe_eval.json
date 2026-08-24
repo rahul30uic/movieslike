@@ -1,0 +1,44 @@
+{
+  "no-probe (floor)": {
+    "1000000000.0": {
+      "conv_white": 0.0555,
+      "movie_mrr": 0.0875
+    },
+    "300.0": {
+      "conv_white": 0.0555,
+      "movie_mrr": 0.0875
+    },
+    "100.0": {
+      "conv_white": 0.0555,
+      "movie_mrr": 0.0875
+    }
+  },
+  "raw (baseline)": {
+    "1000000000.0": {
+      "conv_white": 0.3728,
+      "movie_mrr": 0.1906
+    },
+    "300.0": {
+      "conv_white": 0.3739,
+      "movie_mrr": 0.162
+    },
+    "100.0": {
+      "conv_white": 0.368,
+      "movie_mrr": 0.1718
+    }
+  },
+  "dial-30 (whitened)": {
+    "1000000000.0": {
+      "conv_white": 0.3068,
+      "movie_mrr": 0.16
+    },
+    "300.0": {
+      "conv_white": 0.3199,
+      "movie_mrr": 0.1602
+    },
+    "100.0": {
+      "conv_white": 0.3031,
+      "movie_mrr": 0.1397
+    }
+  }
+}
