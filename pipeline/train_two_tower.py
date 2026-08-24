@@ -71,10 +71,10 @@ def load(facts_file=FACTS_FILE):
     return posts, agree, facts
 
 
-def build(posts, agree, facts):
+def build(posts, agree, facts, val_fraction=VAL_FRACTION):
     rng = np.random.default_rng(SEED)
     order = rng.permutation(len(posts))
-    n_val = int(len(posts) * VAL_FRACTION)
+    n_val = int(len(posts) * val_fraction)
     test = [posts[i] for i in order[:n_val]]
     train = [posts[i] for i in order[n_val:]]
 
@@ -163,6 +163,46 @@ def evaluate(qtower, itower, D):
     return round(float(np.mean(rr_all)), 4), round(float(np.mean(hit10)), 4), tiers
 
 
+def export_serving(qtower, itower, D):
+    """Write the browser serving artifacts: 256-d item index, movie metadata,
+    and the (small) query-tower weights so the browser can map a query vector
+    into the learned space."""
+    engine_dir = os.path.join(REPO, "frontend", "public", "engine")
+    qtower.eval(); itower.eval()
+    with torch.no_grad():
+        I = itower(torch.tensor(D["item_feat"], device=DEVICE)).cpu().numpy().astype(np.float16)
+
+    meta = {}
+    for line in open(os.path.join(DATA_DIR, "movie_vectors_hybrid.json"), encoding="utf-8"):
+        m = json.loads(line)
+        meta[m["tmdb_id"]] = (m.get("title", ""), m.get("poster_path"), m.get("vote_count") or 0)
+    universe, support = D["universe"], D["support"]
+    movies = [{"id": int(t), "t": meta.get(t, ("", None, 0))[0],
+               "p": meta.get(t, ("", None, 0))[1], "n": int(support[i]),
+               "v": int(meta.get(t, ("", None, 0))[2])}
+              for i, t in enumerate(universe)]
+
+    I.tofile(os.path.join(engine_dir, "tt_items.bin"))
+    json.dump({"dim": I.shape[1], "movies": movies},
+              open(os.path.join(engine_dir, "tt_movies.json"), "w"))
+
+    # query tower = Linear(1536,512) -> GELU -> Dropout -> Linear(512,256)
+    # weights shipped as one fp16 blob (w1,b1,w2,b2), shapes in the json.
+    net = qtower.net
+    w = {"w1": net[0].weight.detach().cpu().numpy(), "b1": net[0].bias.detach().cpu().numpy(),
+         "w2": net[3].weight.detach().cpu().numpy(), "b2": net[3].bias.detach().cpu().numpy()}
+    blob = np.concatenate([w[k].ravel() for k in ("w1", "b1", "w2", "b2")]).astype(np.float16)
+    blob.tofile(os.path.join(engine_dir, "tt_query_tower.bin"))
+    json.dump({"order": ["w1", "b1", "w2", "b2"],
+               "shapes": {k: list(v.shape) for k, v in w.items()}},
+              open(os.path.join(engine_dir, "tt_query_tower.json"), "w"))
+
+    size = os.path.getsize(os.path.join(engine_dir, "tt_items.bin")) / 1e6
+    qsz = os.path.getsize(os.path.join(engine_dir, "tt_query_tower.json")) / 1e6
+    logging.info(f"Exported {len(movies)} item vectors ({I.shape[1]}-d, {size:.1f}MB), "
+                 f"query tower ({qsz:.1f}MB) -> {engine_dir}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--epochs", type=int, default=24)
@@ -172,11 +212,22 @@ def main():
                     help="Multiplier on the logQ popularity correction.")
     ap.add_argument("--facts_file", default=FACTS_FILE,
                     help="Item facts vectors (e.g. movie_vibefacts_vectors.npz).")
+    ap.add_argument("--vibe_dropout", type=float, default=0.0,
+                    help="Prob. of zeroing a positive's reddit-vibe block in training "
+                         "(forces the facts pathway to work → cold-start).")
+    ap.add_argument("--query_dropout", type=float, default=0.0,
+                    help="Prob. of zeroing the query's caption or image half in training "
+                         "(robustness to single-modality serving queries).")
+    ap.add_argument("--dump", default=None,
+                    help="After training, dump held-out query + item vectors here "
+                         "(for the reranker eval).")
+    ap.add_argument("--production", action="store_true",
+                    help="Train on ALL posts (no held-out) and export serving artifacts.")
     args = ap.parse_args()
     torch.manual_seed(SEED)
 
     posts, agree, facts = load(args.facts_file)
-    D = build(posts, agree, facts)
+    D = build(posts, agree, facts, val_fraction=0.0 if args.production else VAL_FRACTION)
     logging.info(f"universe={len(D['universe'])}  train_edges={len(D['edges'])}  "
                  f"test={len(D['test'])}")
 
@@ -210,26 +261,71 @@ def main():
             if len(idx) < 16:
                 continue
             pi = edges[idx, 0]; mj = edges[idx, 1]
-            q = qtower(Qtr[pi])                        # (B,256)
-            it = itower(IF[mj])                        # (B,256) positives = candidates
+            qfeat = Qtr[pi]
+            if args.query_dropout > 0:                 # robustness to 1-modality queries
+                qfeat = qfeat.clone()
+                r = torch.rand(len(pi), device=DEVICE)
+                qfeat[r < args.query_dropout / 2, 768:] = 0.0          # image-only
+                qfeat[(r >= args.query_dropout / 2) & (r < args.query_dropout), :768] = 0.0  # text-only
+                qfeat = F.normalize(qfeat, dim=-1)
+            q = qtower(qfeat)                          # (B,256)
+            feat = IF[mj]
+            if args.vibe_dropout > 0:                  # simulate cold-start: facts only
+                feat = feat.clone()
+                drop = torch.rand(len(mj), device=DEVICE) < args.vibe_dropout
+                feat[drop, :1536] = 0.0                # zero reddit-vibe block
+                feat[drop, -1] = 0.0                   # and its log-support signal
+            it = itower(feat)                          # (B,256) positives = candidates
             logits = (q @ it.T) / TEMP - logQ[mj][None, :]   # logQ popularity correction
             target = torch.arange(len(idx), device=DEVICE)
             loss = (F.cross_entropy(logits, target, reduction="none") * ew[idx]).mean()
             opt.zero_grad(); loss.backward(); opt.step()
             losses.append(loss.item())
-        if epoch % 3 == 0 or epoch == args.epochs:
+        if (epoch % 3 == 0 or epoch == args.epochs) and D["test"]:
             mrr, hit10, tiers = evaluate(qtower, itower, D)
             logging.info(f"epoch {epoch:2d}  loss {np.mean(losses):.3f}  "
                          f"MRR {mrr}  Hit@10 {hit10}  tail(0/1/2-4)="
                          f"{tiers['0']}/{tiers['1']}/{tiers['2-4']}")
             if mrr > best["mrr"]:
                 best = {"mrr": mrr, "hit10": hit10, "tiers": tiers, "epoch": epoch}
+        elif not D["test"]:
+            logging.info(f"epoch {epoch:2d}  loss {np.mean(losses):.3f}")
+
+    if args.production:
+        export_serving(qtower, itower, D)
+        return
 
     print("\n=== TWO-TOWER (held-out post->movie) — best epoch", best["epoch"], "===")
     print("MRR", best["mrr"], " Hit@10", best["hit10"])
     print("recall@10 by support tier:", best["tiers"])
     with open(os.path.join(RESULTS_DIR, "two_tower.json"), "w") as f:
         json.dump(best, f, indent=2)
+
+    if args.dump:
+        qtower.eval(); itower.eval()
+        with torch.no_grad():
+            I = itower(torch.tensor(D["item_feat"], device=DEVICE)).cpu().numpy()
+            Qt = qtower(torch.tensor(np.stack(
+                [unit(np.asarray(p["combined_vector"], np.float32)) for p in D["test"]]),
+                device=DEVICE)).cpu().numpy()
+        votes = {}
+        for line in open(os.path.join(DATA_DIR, "movie_vectors_hybrid.json"), encoding="utf-8"):
+            m = json.loads(line)
+            votes[m["tmdb_id"]] = m.get("vote_count") or 0
+        universe = D["universe"]
+        item_votes = np.asarray([votes.get(t, 0) for t in universe], dtype=np.float32)
+        # relevant universe-indices per test post
+        mi = D["mi"]
+        test_rel = [[mi[t] for t in set(p["tmdb_ids"]) if t in mi] for p in D["test"]]
+        np.savez_compressed(args.dump, q_test=Qt.astype(np.float32),
+                            item_vecs=I.astype(np.float32),
+                            item_support=D["support"].astype(np.float32),
+                            item_votes=item_votes,
+                            item_tmdb=np.asarray(universe, dtype=np.int64))
+        with open(args.dump.replace(".npz", "_rel.json"), "w") as f:
+            json.dump(test_rel, f)
+        logging.info(f"Dumped eval vectors to {args.dump} "
+                     f"(q_test {Qt.shape}, items {I.shape}).")
 
 
 if __name__ == "__main__":

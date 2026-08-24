@@ -13,6 +13,7 @@
  */
 
 import { env, pipeline, AutoProcessor, SiglipVisionModel, RawImage } from "@huggingface/transformers";
+import { loadTwoTower, rankTwoTower } from "./twotower";
 
 // The image tower is OUR LoRA-tuned SigLIP (+18.7% held-out, +8% end-to-end),
 // served as quantized ONNX from this site. Text model stays on the HF hub.
@@ -20,6 +21,11 @@ env.localModelPath = "/models/";
 const TEXT_MODEL = "Xenova/bge-base-en-v1.5";
 const IMAGE_MODEL = "siglip-lora";
 const QUERY_PREFIX = "Represent this sentence for searching relevant passages: ";
+
+// Two-stage serving: query tower -> 256-d item retrieval -> MMR rerank.
+// When on, rank() dispatches to twotower.js; the query-building paths
+// (text/image/probe) are unchanged — they still produce a 1536-d hybrid vector.
+const TWO_TOWER = process.env.NEXT_PUBLIC_TWO_TOWER === "true";
 
 let state = null;      // { movies, vectors, dim, penalties }
 let textPipe = null;
@@ -35,6 +41,13 @@ function halfToFloat(h) {
 
 export async function loadIndex(onStatus) {
     if (state) return state;
+    if (TWO_TOWER) {
+        // Two-tower serving: load its artifacts; state only needs the query
+        // dimension (1536) so the text/image/probe paths size their target.
+        await loadTwoTower(onStatus);
+        state = { dim: 1536 };
+        return state;
+    }
     onStatus?.("Downloading movie index…");
     const [metaRes, binRes] = await Promise.all([
         fetch("/engine/movies.json"),
@@ -158,8 +171,11 @@ export function resetTaste() {
     } catch { /* ignore */ }
 }
 
-/** Ranking — mirror of rank() in api/main.py. */
-export function rank(target, { alpha = 0.3, minVotes = 500, minSupport = 3, n = 12 } = {}) {
+/** Ranking. Two-tower mode dispatches to the retrieval+MMR-rerank pipeline;
+ *  otherwise the legacy single-stage z-scored-cosine + popularity penalty. */
+export function rank(target, opts = {}) {
+    if (TWO_TOWER) return rankTwoTower(target, opts);
+    const { alpha = 0.3, minVotes = 500, minSupport = 3, n = 12 } = opts;
     const { movies, vectors, dim, penalties } = state;
     const sims = new Float32Array(movies.length);
     for (let i = 0; i < movies.length; i++) {
@@ -388,9 +404,10 @@ export async function searchImage(fileOrUrl, opts, onStatus) {
 
     // --- Introspection: which regions of the upload drove the match? ---
     // SigLIP patch tokens vs the top match's image block, as a spatial grid.
+    // (Skipped in two-tower mode — it reads the legacy hybrid movie vectors.)
     let explanation = null;
     const patches = out.last_hidden_state; // [1, n_patches, 768]
-    if (patches && recommendations.length > 0) {
+    if (!TWO_TOWER && patches && recommendations.length > 0) {
         const [, nPatch, pDim] = patches.dims;
         const half = state.dim / 2;
         // First recommendation whose image block actually carries signal

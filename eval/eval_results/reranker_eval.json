@@ -1,0 +1,32 @@
+{
+  "cosine (no rerank)": {
+    "Recall@10": 0.0909,
+    "diversity": 0.2477,
+    "tail_frac": 0.076,
+    "mean_pop": 3.757
+  },
+  "popularity a=0.3": {
+    "Recall@10": 0.0823,
+    "diversity": 0.2651,
+    "tail_frac": 0.1454,
+    "mean_pop": 3.441
+  },
+  "mmr lam=0.3": {
+    "Recall@10": 0.0876,
+    "diversity": 0.2587,
+    "tail_frac": 0.0879,
+    "mean_pop": 3.704
+  },
+  "mmr lam=0.5": {
+    "Recall@10": 0.0817,
+    "diversity": 0.2817,
+    "tail_frac": 0.1198,
+    "mean_pop": 3.59
+  },
+  "pop+mmr a=0.3 lam=0.3": {
+    "Recall@10": 0.0793,
+    "diversity": 0.2823,
+    "tail_frac": 0.1739,
+    "mean_pop": 3.335
+  }
+}
