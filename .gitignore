@@ -32,3 +32,6 @@ cluster_visualization.png
 !deploy/data/
 !deploy/data/**
 frontend/public/reddit_images_*
+
+# Internal status doc — kept local only, not in the public repo
+STATUS.md
