@@ -387,15 +387,24 @@ export async function searchText(query, opts, onStatus) {
     return rank(personalize(target), opts);
 }
 
-export async function searchImage(fileOrUrl, opts, onStatus) {
+export async function searchImage(filesOrUrls, opts, onStatus) {
     await loadIndex(onStatus);
     const { processor, model } = await loadVisionModel(onStatus);
-    onStatus?.("Embedding your image…");
-    const url = typeof fileOrUrl === "string" ? fileOrUrl : URL.createObjectURL(fileOrUrl);
-    const image = await RawImage.read(url);
-    const inputs = await processor(image);
-    const out = await model(inputs);
-    const v = normalize(out.pooler_output.data); // = SigLIP get_image_features
+    const list = Array.isArray(filesOrUrls) ? filesOrUrls : [filesOrUrls];
+    onStatus?.(list.length > 1 ? `Embedding ${list.length} images…` : "Embedding your image…");
+
+    // Encode each image; mean-pool the SigLIP vectors (as the pipeline does
+    // for posts with several images), then re-normalize.
+    let sum = null, firstOut = null, firstUrl = null;
+    for (const f of list) {
+        const url = typeof f === "string" ? f : URL.createObjectURL(f);
+        const out = await model(await processor(await RawImage.read(url)));
+        if (!firstOut) { firstOut = out; firstUrl = url; }
+        const v = normalize(out.pooler_output.data);
+        if (!sum) sum = new Float32Array(v.length);
+        for (let i = 0; i < v.length; i++) sum[i] += v[i];
+    }
+    const v = normalize(sum); // = mean of the per-image unit vectors, renormalized
     const target = new Float32Array(state.dim);
     target.set(v, state.dim - v.length); // image block
     onStatus?.(null);
@@ -404,9 +413,10 @@ export async function searchImage(fileOrUrl, opts, onStatus) {
 
     // --- Introspection: which regions of the upload drove the match? ---
     // SigLIP patch tokens vs the top match's image block, as a spatial grid.
-    // (Skipped in two-tower mode — it reads the legacy hybrid movie vectors.)
+    // (Single image + legacy mode only; two-tower reads no hybrid movie vectors.)
     let explanation = null;
-    const patches = out.last_hidden_state; // [1, n_patches, 768]
+    const patches = list.length === 1 ? firstOut.last_hidden_state : null;
+    const url = firstUrl;
     if (!TWO_TOWER && patches && recommendations.length > 0) {
         const [, nPatch, pDim] = patches.dims;
         const half = state.dim / 2;

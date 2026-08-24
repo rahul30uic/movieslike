@@ -1,7 +1,13 @@
 "use client";
 
-const MovieCard = ({ movie }) => (
-    <div className="group rounded-xl overflow-hidden border border-stone-800 hover:border-amber-400/60 bg-stone-950 transition-all duration-300 hover:scale-[1.02] shadow-xl shadow-black/40">
+import { useState } from "react";
+import { MovieModal } from "@/components/MovieModal";
+
+const MovieCard = ({ movie, onOpen }) => (
+    <div
+        onClick={() => onOpen(movie)}
+        className="group rounded-xl overflow-hidden border border-stone-800 hover:border-amber-400/60 bg-stone-950 transition-all duration-300 hover:scale-[1.02] shadow-xl shadow-black/40 cursor-pointer"
+    >
         {movie.poster_path ? (
             <img
                 src={`https://image.tmdb.org/t/p/w500${movie.poster_path}`}
@@ -26,6 +32,8 @@ const SkeletonCard = () => (
 );
 
 export const MovieGrid = ({ movies, isLoading, error }) => {
+    const [selected, setSelected] = useState(null);
+
     if (error) {
         return (
             <div className="text-center py-10 px-4 border border-red-900/60 bg-red-950/20 rounded-xl">
@@ -50,10 +58,13 @@ export const MovieGrid = ({ movies, isLoading, error }) => {
     }
 
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-            {movies.map((movie) => (
-                <MovieCard key={movie.tmdb_id} movie={movie} />
-            ))}
-        </div>
+        <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                {movies.map((movie) => (
+                    <MovieCard key={movie.tmdb_id} movie={movie} onOpen={setSelected} />
+                ))}
+            </div>
+            <MovieModal movie={selected} onClose={() => setSelected(null)} />
+        </>
     );
 };

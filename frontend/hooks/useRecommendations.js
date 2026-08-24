@@ -149,20 +149,22 @@ export const useRecommendations = () => {
     }, [alpha]);
 
     /**
-     * Fetches recommendations from an uploaded mood image (query-by-image).
+     * Fetches recommendations from one or more uploaded mood images.
+     * Multiple images are mean-pooled into a single query in the engine.
      */
-    const fetchByImage = useCallback(async (file) => {
-        if (!file) {
+    const fetchByImage = useCallback(async (filesArg) => {
+        const files = Array.isArray(filesArg) ? filesArg : filesArg ? [filesArg] : [];
+        if (!files.length) {
             setError("Choose an image first.");
             return;
         }
-        setLastSearch({ type: "image", payload: file });
+        setLastSearch({ type: "image", payload: files });
 
         if (BROWSER_ENGINE) {
             setSelectedAnchor(null);
             setExplanation(null);
             return runEngine(async (e) => {
-                const res = await e.searchImage(file, { alpha, minVotes: 500, n: 12 }, setEngineStatus);
+                const res = await e.searchImage(files, { alpha, minVotes: 500, n: 12 }, setEngineStatus);
                 setExplanation(res.explanation);
                 return res.recommendations;
             });
@@ -175,7 +177,7 @@ export const useRecommendations = () => {
 
         try {
             const form = new FormData();
-            form.append("file", file);
+            files.forEach((f) => form.append("file", f)); // API path: first image used server-side
             form.append("alpha", String(alpha));
             form.append("num_recommendations", "12");
 
