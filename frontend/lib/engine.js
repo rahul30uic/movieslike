@@ -13,7 +13,7 @@
  */
 
 import { env, pipeline, AutoProcessor, SiglipVisionModel, RawImage } from "@huggingface/transformers";
-import { loadTwoTower, rankTwoTower } from "./twotower";
+import { loadTwoTower, rankTwoTower, queryAffect } from "./twotower";
 
 // The image tower is OUR LoRA-tuned SigLIP (+18.7% held-out, +8% end-to-end),
 // served as quantized ONNX from this site. Text model stays on the HF hub.
@@ -384,7 +384,9 @@ export async function searchText(query, opts, onStatus) {
     target.set(q, 0); // caption block; image block stays zero
     onStatus?.(null);
     updateTaste(target);
-    return rank(personalize(target), opts);
+    // Parse the query's affect so the reranker can exclude unwanted emotions.
+    const wantAffect = TWO_TOWER ? queryAffect(q) : null;
+    return rank(personalize(target), { ...opts, wantAffect });
 }
 
 export async function searchImage(filesOrUrls, opts, onStatus) {

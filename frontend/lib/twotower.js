@@ -12,6 +12,13 @@
  */
 
 let tt = null; // { items, dim, movies, w1,b1,w2,b2, hDim, inDim, outDim }
+let affect = null; // { mat, K, dims, anchors, aversive } for the exclusion filter
+
+// Emotions that ruin a mood when the query didn't ask for them. Query-conditioned:
+// only penalized when the query's "want" for that emotion is low (see rankTwoTower).
+const AVERSIVE = ["horror", "fear", "disgust", "anxiety", "empathic_pain", "awkwardness"];
+const EXCL_THRESH = 0.5;   // "doesn't want it" if query affect < this
+const EXCL_WEIGHT = 1.3;   // strength of the exclusion penalty
 
 function halfToFloat(h) {
     const s = (h & 0x8000) >> 15, e = (h & 0x7c00) >> 10, f = h & 0x03ff;
@@ -50,8 +57,45 @@ export async function loadTwoTower(onStatus) {
 
     tt = { items, dim: meta.dim, movies: meta.movies, w1, b1, w2, b2,
            hDim: shapes.w1[0], inDim: shapes.w1[1], outDim: shapes.w2[0] };
+
+    // affect: per-movie emotion profiles + query anchors, for the exclusion filter
+    try {
+        const [afRes, anRes] = await Promise.all([
+            fetch("/engine/affect.bin"),
+            fetch("/engine/affect_anchors.json"),
+        ]);
+        const anc = await anRes.json();
+        const K = anc.dims.length;
+        affect = {
+            mat: f16buf(await afRes.arrayBuffer()),   // (N x K), row-aligned to movies
+            K, dims: anc.dims,
+            anchors: Float32Array.from(anc.vecs.flat()), // (K x 768)
+            aversive: AVERSIVE.map((d) => anc.dims.indexOf(d)).filter((i) => i >= 0),
+        };
+    } catch { affect = null; }
+
     onStatus?.(null);
     return tt;
+}
+
+/** Read a text query's affect profile by projecting its bge vector onto the
+ *  emotion anchors (#4). Returns a 0..1 "want" score per emotion, or null. */
+export function queryAffect(qvec) {
+    if (!affect) return null;
+    const { anchors, K } = affect;
+    const s = new Float32Array(K);
+    let mn = Infinity, mx = -Infinity;
+    for (let d = 0; d < K; d++) {
+        let dot = 0;
+        const off = d * 768;
+        for (let j = 0; j < 768; j++) dot += anchors[off + j] * qvec[j];
+        s[d] = dot;
+        if (dot < mn) mn = dot;
+        if (dot > mx) mx = dot;
+    }
+    const want = new Float32Array(K);
+    for (let d = 0; d < K; d++) want[d] = (s[d] - mn) / (mx - mn + 1e-9);
+    return want;
 }
 
 function gelu(x) {
@@ -93,7 +137,7 @@ function zscore(arr) {
  * old rank() input), so all query paths (text/image/probe) work unchanged.
  * alpha = popularity de-bias (hidden gems ↔ favorites), lambda = MMR diversity.
  */
-export function rankTwoTower(target, { alpha = 0.3, lambda = 0.3, minVotes = 500, n = 12, K = 200 } = {}) {
+export function rankTwoTower(target, { alpha = 0.3, lambda = 0.3, minVotes = 500, n = 12, K = 200, wantAffect = null } = {}) {
     const { items, dim, movies } = tt;
     const q = queryTower(target);
     const M = movies.length;
@@ -114,6 +158,20 @@ export function rankTwoTower(target, { alpha = 0.3, lambda = 0.3, minVotes = 500
     const zr = zscore(cand.map((i) => sims[i]));
     const zp = zscore(cand.map((i) => Math.log1p(movies[i].n)));
     let base = cand.map((_, k) => zr[k] - alpha * zp[k]);
+
+    // Exclusion (#3): penalize candidates strong on aversive emotions the query
+    // clearly didn't ask for — cosine can only pull toward, this is how we say
+    // "not that". Query-conditioned, so a horror query keeps its horror.
+    if (wantAffect && affect) {
+        const { mat, K: AK, aversive } = affect;
+        for (let k = 0; k < cand.length; k++) {
+            let clash = 0;
+            const off = cand[k] * AK;
+            for (const d of aversive) clash += mat[off + d] * Math.max(0, EXCL_THRESH - wantAffect[d]);
+            base[k] -= EXCL_WEIGHT * clash;
+        }
+    }
+
     const mn = Math.min(...base), mx = Math.max(...base);
     base = base.map((b) => (b - mn) / (mx - mn + 1e-9));
 
