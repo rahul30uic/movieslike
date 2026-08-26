@@ -71,7 +71,7 @@ def load(facts_file=FACTS_FILE):
     return posts, agree, facts
 
 
-def build(posts, agree, facts, val_fraction=VAL_FRACTION):
+def build(posts, agree, facts, val_fraction=VAL_FRACTION, use_affect=False):
     rng = np.random.default_rng(SEED)
     order = rng.permutation(len(posts))
     n_val = int(len(posts) * val_fraction)
@@ -100,7 +100,16 @@ def build(posts, agree, facts, val_fraction=VAL_FRACTION):
 
     facts_mat = np.stack([facts[t] for t in universe]).astype(np.float32)
     log_sup = np.log1p(support).astype(np.float32)[:, None]
-    item_feat = np.concatenate([vibe_sum, facts_mat, log_sup], axis=1)  # (U, 2305)
+    blocks = [vibe_sum, facts_mat]
+    # affect prior (25-d) as an extra item input — EXPERIMENT (--affect_item).
+    # Measured: +3% Hit@10 overall but reorganizes retrieval so the exclusion
+    # filter regresses on comfort queries. NOT in the shipped model. Off by default.
+    if use_affect:
+        affect_path = os.path.join(DATA_DIR, "movie_affect.json")
+        affect = {int(k): v for k, v in json.load(open(affect_path)).items()}
+        K_aff = len(next(iter(affect.values())))
+        blocks.append(np.array([affect.get(t, [0.0] * K_aff) for t in universe], dtype=np.float32))
+    item_feat = np.concatenate(blocks + [log_sup], axis=1)
 
     # training edges (train posts -> movies in universe), agreement-weighted
     q_train = np.stack([unit(np.asarray(p["combined_vector"], dtype=np.float32)) for p in train])
@@ -223,11 +232,15 @@ def main():
                          "(for the reranker eval).")
     ap.add_argument("--production", action="store_true",
                     help="Train on ALL posts (no held-out) and export serving artifacts.")
+    ap.add_argument("--affect_item", action="store_true",
+                    help="EXPERIMENT: add the 25-d affect prior to the item tower "
+                         "(+3% Hit@10 but regresses the exclusion filter; not shipped).")
     args = ap.parse_args()
     torch.manual_seed(SEED)
 
     posts, agree, facts = load(args.facts_file)
-    D = build(posts, agree, facts, val_fraction=0.0 if args.production else VAL_FRACTION)
+    D = build(posts, agree, facts, val_fraction=0.0 if args.production else VAL_FRACTION,
+              use_affect=args.affect_item)
     logging.info(f"universe={len(D['universe'])}  train_edges={len(D['edges'])}  "
                  f"test={len(D['test'])}")
 
